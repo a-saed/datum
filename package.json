@@ -1,0 +1,8 @@
+{
+  "name": "datum",
+  "private": true,
+  "workspaces": ["packages/*", "demo"],
+  "scripts": {
+    "test": "npm test --workspaces --if-present"
+  }
+}

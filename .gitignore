@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Go
+packages/server/server
+packages/server/*.exe
+
+# OS
+.DS_Store
