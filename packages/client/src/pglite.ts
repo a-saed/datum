@@ -44,6 +44,7 @@ export async function setupSchema(db: PGlite): Promise<boolean> {
     DROP TABLE IF EXISTS _datum_outbox;
     DROP TABLE IF EXISTS features;
     DROP FUNCTION IF EXISTS _datum_capture_change CASCADE;
+    DELETE FROM _datum_meta;
   `)
 
   await db.exec(`
@@ -57,7 +58,7 @@ export async function setupSchema(db: PGlite): Promise<boolean> {
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_outbox (
-      write_id    UUID NOT NULL DEFAULT gen_random_uuid(),
+      write_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       op          TEXT NOT NULL,
       feature_id  UUID NOT NULL,
       data        JSONB,
@@ -99,10 +100,11 @@ export async function setupSchema(db: PGlite): Promise<boolean> {
     FOR EACH ROW EXECUTE FUNCTION _datum_capture_change()
   `)
 
-  await db.exec(`
-    INSERT INTO _datum_meta (key, value) VALUES ('schema_version', '${SCHEMA_VERSION}')
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `)
+  await db.query(
+    `INSERT INTO _datum_meta (key, value) VALUES ('schema_version', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [SCHEMA_VERSION]
+  )
 
   return true
 }
