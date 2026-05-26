@@ -28,7 +28,8 @@ docker compose up -d
 
 ```bash
 npm install
-cd demo && npm run dev
+npm run build -w datum
+npm run dev -w datum-demo
 ```
 
 Open http://localhost:5173. Click the map to add features. Watch them sync.

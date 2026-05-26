@@ -1,4 +1,5 @@
--- sql/001_datum_schema.sql
+-- packages/server/sql/001_datum_schema.sql
+-- Copy of sql/001_datum_schema.sql required for go:embed — edit the root sql/ file, not this one.
 -- Datum sync protocol schema.
 -- {{TABLE}} is replaced by datum-server with the configured table name (quoted identifier).
 -- Run this migration via datum-server on startup; it is idempotent.

@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": ["packages/*", "demo"],
   "scripts": {
+    "build": "npm run build -w datum",
     "test": "npm test --workspaces --if-present"
   }
 }

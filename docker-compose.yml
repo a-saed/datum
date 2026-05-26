@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: datum
     ports:
       - "5432:5432"
+    volumes:
+      - datum_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U datum"]
       interval: 5s
@@ -23,3 +25,7 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
+    restart: on-failure
+
+volumes:
+  datum_pgdata:

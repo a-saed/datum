@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /app
 COPY packages/server/go.mod packages/server/go.sum ./
 RUN go mod download
