@@ -1,14 +1,17 @@
 // packages/client/tests/sync.test.ts
 import { describe, it, expect, beforeEach } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
-import { bootLocalDb } from '../src/pglite.js'
+import { postgis } from '@electric-sql/pglite-postgis'
+import { setupSchema } from '../src/pglite.js'
 import { drainOutbox, applyDelta, markSynced } from '../src/sync.js'
 import type { DeltaMessage } from '../src/types.js'
 
 let db: PGlite
 
 beforeEach(async () => {
-  db = await bootLocalDb()
+  db = new PGlite({ extensions: { postgis } })
+  await db.exec('CREATE EXTENSION IF NOT EXISTS postgis')
+  await setupSchema(db)
 })
 
 describe('drainOutbox', () => {

@@ -56,7 +56,7 @@ export class DatumClient {
    * @throws If the WebSocket connection fails or the snapshot times out.
    */
   static async connect(config: DatumConfig): Promise<DatumClient> {
-    const db = await bootLocalDb()
+    const { db } = await bootLocalDb()
     const clientId = uuidv4()
 
     let resolveReady!: () => void

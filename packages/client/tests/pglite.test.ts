@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { postgis } from '@electric-sql/pglite-postgis'
-import { bootLocalDb } from '../src/pglite.js'
+import { setupSchema, SCHEMA_VERSION } from '../src/pglite.js'
 
 let db: PGlite
 
@@ -85,37 +85,69 @@ describe('PostGIS WASM spike — required functions', () => {
   })
 })
 
-describe('bootLocalDb', () => {
-  it('creates the features table', async () => {
-    const local = await bootLocalDb()
-    const res = await local.query<{ count: string | number }>(
-      `SELECT COUNT(*) AS count FROM features`
+describe('setupSchema', () => {
+  const makeDb = async () => {
+    const d = new PGlite({ extensions: { postgis } })
+    await d.exec('CREATE EXTENSION IF NOT EXISTS postgis')
+    return d
+  }
+
+  it('first call creates tables and returns isFirstVisit=true', async () => {
+    const d = await makeDb()
+    const isFirstVisit = await setupSchema(d)
+    expect(isFirstVisit).toBe(true)
+    const { rows } = await d.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM features`
     )
-    expect(String(res.rows[0].count)).toBe('0')
+    expect(rows[0].count).toBe(0)
   })
 
-  it('creates the _datum_outbox table', async () => {
-    const local = await bootLocalDb()
-    const res = await local.query<{ count: string | number }>(
-      `SELECT COUNT(*) AS count FROM _datum_outbox`
+  it('returns isFirstVisit=false when features exist', async () => {
+    const d = await makeDb()
+    await setupSchema(d)
+    await d.query(
+      `INSERT INTO features (geom, properties, updated_at)
+       VALUES (ST_SetSRID(ST_MakePoint(10, 20), 4326), '{}', now())`
     )
-    expect(String(res.rows[0].count)).toBe('0')
+    const isFirstVisit = await setupSchema(d)
+    expect(isFirstVisit).toBe(false)
+  })
+
+  it('schema version mismatch wipes tables and returns isFirstVisit=true', async () => {
+    const d = await makeDb()
+    await setupSchema(d)
+    // Insert a feature then corrupt the schema version
+    await d.query(
+      `INSERT INTO features (geom, properties, updated_at)
+       VALUES (ST_SetSRID(ST_MakePoint(10, 20), 4326), '{}', now())`
+    )
+    await d.exec(`UPDATE _datum_meta SET value = '0' WHERE key = 'schema_version'`)
+    // Re-run setup — should wipe features
+    const isFirstVisit = await setupSchema(d)
+    expect(isFirstVisit).toBe(true)
+    const { rows } = await d.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM features`
+    )
+    expect(rows[0].count).toBe(0)
+  })
+
+  it('sets schema_version in _datum_meta', async () => {
+    const d = await makeDb()
+    await setupSchema(d)
+    const { rows } = await d.query<{ value: string }>(
+      `SELECT value FROM _datum_meta WHERE key = 'schema_version'`
+    )
+    expect(rows[0].value).toBe(SCHEMA_VERSION)
   })
 
   it('trigger writes to outbox on INSERT', async () => {
-    const local = await bootLocalDb()
-    await local.query(
+    const d = await makeDb()
+    await setupSchema(d)
+    await d.query(
       `INSERT INTO features (id, geom, properties, updated_at)
-       VALUES (
-         gen_random_uuid(),
-         ST_SetSRID(ST_MakePoint(10, 20), 4326),
-         '{"name":"test"}',
-         now()
-       )`
+       VALUES (gen_random_uuid(), ST_SetSRID(ST_MakePoint(10, 20), 4326), '{"name":"test"}', now())`
     )
-    const res = await local.query<{ op: string }>(
-      `SELECT op FROM _datum_outbox LIMIT 1`
-    )
-    expect(res.rows[0].op).toBe('insert')
+    const { rows } = await d.query<{ op: string }>(`SELECT op FROM _datum_outbox LIMIT 1`)
+    expect(rows[0].op).toBe('insert')
   })
 })
