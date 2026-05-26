@@ -8,3 +8,6 @@ packages/server/*.exe
 
 # OS
 .DS_Store
+
+# Internal planning artifacts
+docs/superpowers/
