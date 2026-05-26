@@ -13,10 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 type wsClient struct {
 	id   string
 	bbox [4]float64
@@ -25,19 +21,32 @@ type wsClient struct {
 }
 
 type server struct {
-	pool    *pgxpool.Pool
-	table   string
-	port    string
-	clients map[string]*wsClient
-	mu      sync.RWMutex
+	pool          *pgxpool.Pool
+	table         string
+	port          string
+	allowedOrigin string
+	clients       map[string]*wsClient
+	mu            sync.RWMutex
 }
 
-func newServer(pool *pgxpool.Pool, table, port string) *server {
+func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string) *server {
 	return &server{
-		pool:    pool,
-		table:   table,
-		port:    port,
-		clients: make(map[string]*wsClient),
+		pool:          pool,
+		table:         table,
+		port:          port,
+		allowedOrigin: allowedOrigin,
+		clients:       make(map[string]*wsClient),
+	}
+}
+
+func (s *server) upgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			if s.allowedOrigin == "*" {
+				return true
+			}
+			return r.Header.Get("Origin") == s.allowedOrigin
+		},
 	}
 }
 
@@ -54,7 +63,8 @@ func (s *server) run(ctx context.Context) error {
 }
 
 func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	u := s.upgrader()
+	conn, err := u.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("datum-server: ws upgrade: %v", err)
 		return

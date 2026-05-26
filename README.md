@@ -46,6 +46,19 @@ Open a second browser tab — features added in one tab appear in the other with
 
 All spatial intelligence lives in PostGIS. The Go server is replaceable.
 
+## Production deployment
+
+Run datum-server with `-allowed-origin` set to your app's domain to prevent unauthorized WebSocket connections:
+
+```bash
+docker run ghcr.io/a-saed/datum-server \
+  -db "postgres://user:pass@host/mydb" \
+  -table features \
+  -allowed-origin "https://myapp.com"
+```
+
+The default `*` allows all origins and is only suitable for local development.
+
 ## Architecture
 
 Client (PGlite + PostGIS WASM) ↔ WebSocket ↔ datum-server (Go, ~300 lines) ↔ pgx ↔ PostGIS

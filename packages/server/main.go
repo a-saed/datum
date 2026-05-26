@@ -13,9 +13,10 @@ import (
 var tableNameRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func main() {
-	dbURL  := flag.String("db",    "",     "PostgreSQL connection URL (required)")
-	table  := flag.String("table", "",     "Table name to sync (required)")
-	port   := flag.String("port",  "3000", "Port to listen on")
+	dbURL         := flag.String("db",             "",     "PostgreSQL connection URL (required)")
+	table         := flag.String("table",          "",     "Table name to sync (required)")
+	port          := flag.String("port",           "3000", "Port to listen on")
+	allowedOrigin := flag.String("allowed-origin", "*",    "Allowed WebSocket origin (e.g. https://myapp.com). Use * to allow all (dev only)")
 	flag.Parse()
 
 	if *dbURL == "" {
@@ -41,7 +42,7 @@ func main() {
 	}
 	log.Printf("datum-server: migration applied to table %q", *table)
 
-	srv := newServer(pool, *table, *port)
+	srv := newServer(pool, *table, *port, *allowedOrigin)
 	log.Printf("datum-server: listening on :%s", *port)
 	log.Fatal(srv.run(ctx))
 }
