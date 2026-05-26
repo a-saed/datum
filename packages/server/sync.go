@@ -32,7 +32,7 @@ func sendSnapshot(ctx context.Context, s *server, client *wsClient) error {
 			return fmt.Errorf("scan feature: %w", err)
 		}
 		if err := json.Unmarshal(props, &f.Properties); err != nil {
-			f.Properties = map[string]interface{}{}
+			f.Properties = map[string]any{}
 		}
 		features = append(features, f)
 	}

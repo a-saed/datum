@@ -9,10 +9,10 @@ type SubscribeMessage struct {
 }
 
 type WriteEdit struct {
-	Op        string                 `json:"op"`
-	FeatureID string                 `json:"feature_id"`
-	Data      map[string]interface{} `json:"data"`
-	UpdatedAt string                 `json:"updated_at"`
+	Op        string        `json:"op"`
+	FeatureID string        `json:"feature_id"`
+	Data      map[string]any `json:"data"`
+	UpdatedAt string        `json:"updated_at"`
 }
 
 type WriteMessage struct {
@@ -22,10 +22,10 @@ type WriteMessage struct {
 
 // Wire protocol — server → client
 type Feature struct {
-	ID         string                 `json:"id"`
-	Geom       string                 `json:"geom"`
-	Properties map[string]interface{} `json:"properties"`
-	UpdatedAt  string                 `json:"updated_at"`
+	ID         string        `json:"id"`
+	Geom       string        `json:"geom"`
+	Properties map[string]any `json:"properties"`
+	UpdatedAt  string        `json:"updated_at"`
 }
 
 type SnapshotMessage struct {
@@ -46,10 +46,10 @@ type AckMessage struct {
 
 // Internal — LISTEN/NOTIFY payload from PostGIS trigger
 type NotifyPayload struct {
-	Op             string                 `json:"op"`
-	ID             string                 `json:"id"`
-	Geom           string                 `json:"geom"`
-	Properties     map[string]interface{} `json:"properties"`
-	UpdatedAt      string                 `json:"updated_at"`
-	OriginClientID string                 `json:"origin_client_id"`
+	Op             string        `json:"op"`
+	ID             string        `json:"id"`
+	Geom           string        `json:"geom"`
+	Properties     map[string]any `json:"properties"`
+	UpdatedAt      string        `json:"updated_at"`
+	OriginClientID string        `json:"origin_client_id"`
 }

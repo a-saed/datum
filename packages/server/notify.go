@@ -72,8 +72,8 @@ func extractFirstCoordinate(geojson string) (float64, float64) {
 		return 0, 0
 	}
 	var g struct {
-		Type        string        `json:"type"`
-		Coordinates []interface{} `json:"coordinates"`
+		Type        string  `json:"type"`
+		Coordinates []any `json:"coordinates"`
 	}
 	if err := json.Unmarshal([]byte(geojson), &g); err != nil {
 		return 0, 0
