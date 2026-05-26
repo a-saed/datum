@@ -25,6 +25,9 @@ export function Map({ onStatusChange }: Props) {
       zoom: 2,
     })
 
+    // Track the active add-feature popup so we only ever show one at a time
+    let activePopup: maplibregl.Popup | null = null
+
     map.on('load', async () => {
       map.addSource('features', {
         type: 'geojson',
@@ -34,7 +37,7 @@ export function Map({ onStatusChange }: Props) {
         id: 'features-layer',
         type: 'circle',
         source: 'features',
-        paint: { 'circle-radius': 8, 'circle-color': '#00aaff' },
+        paint: { 'circle-radius': 8, 'circle-color': '#00aaff', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' },
       })
 
       const bounds = map.getBounds()
@@ -51,7 +54,7 @@ export function Map({ onStatusChange }: Props) {
           bbox,
         })
         clientRef.current = client
-        onStatusChangeRef.current('Connected — click map to add features')
+        onStatusChangeRef.current('Connected — click map to add a feature')
 
         await refreshMap(map, client)
         intervalRef.current = setInterval(() => { void refreshMap(map, client) }, 3000)
@@ -60,20 +63,84 @@ export function Map({ onStatusChange }: Props) {
       }
     })
 
-    map.on('click', async (e) => {
+    map.on('click', (e) => {
       const client = clientRef.current
       if (!client) return
+
+      // Close any existing popup first
+      activePopup?.remove()
+
       const { lng, lat } = e.lngLat
-      await client.query(
-        `INSERT INTO features (geom, properties, updated_at)
-         VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())`,
-        [lng, lat, JSON.stringify({ name: `Point ${lng.toFixed(3)},${lat.toFixed(3)}` })]
-      )
-      onStatusChangeRef.current('Feature added — syncing...')
+
+      // Build the popup form
+      const container = document.createElement('div')
+      container.style.cssText = 'display:flex;flex-direction:column;gap:8px;min-width:200px;padding:4px 0'
+
+      const nameInput = document.createElement('input')
+      nameInput.type = 'text'
+      nameInput.placeholder = 'Feature name'
+      nameInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:14px;outline:none'
+
+      const noteInput = document.createElement('input')
+      noteInput.type = 'text'
+      noteInput.placeholder = 'Note (optional)'
+      noteInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:14px;outline:none'
+
+      const saveBtn = document.createElement('button')
+      saveBtn.textContent = 'Save feature'
+      saveBtn.style.cssText = 'background:#00aaff;color:#fff;border:none;border-radius:4px;padding:7px 12px;font-size:14px;cursor:pointer'
+
+      const coordLabel = document.createElement('div')
+      coordLabel.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+      coordLabel.style.cssText = 'font-size:11px;color:#888;text-align:right'
+
+      container.append(nameInput, noteInput, saveBtn, coordLabel)
+
+      saveBtn.onclick = async () => {
+        const name = nameInput.value.trim() || `Point ${lng.toFixed(3)},${lat.toFixed(3)}`
+        const note = noteInput.value.trim()
+        const properties: Record<string, string> = { name }
+        if (note) properties.note = note
+
+        saveBtn.disabled = true
+        saveBtn.textContent = 'Saving...'
+
+        try {
+          await client.query(
+            `INSERT INTO features (geom, properties, updated_at)
+             VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())`,
+            [lng, lat, JSON.stringify(properties)]
+          )
+          activePopup?.remove()
+          activePopup = null
+          onStatusChangeRef.current('Feature saved — syncing...')
+        } catch (err) {
+          saveBtn.disabled = false
+          saveBtn.textContent = 'Save feature'
+          onStatusChangeRef.current(`Error saving: ${String(err)}`)
+        }
+      }
+
+      // Submit on Enter in either input
+      const onEnter = (ev: KeyboardEvent) => { if (ev.key === 'Enter') saveBtn.click() }
+      nameInput.addEventListener('keydown', onEnter)
+      noteInput.addEventListener('keydown', onEnter)
+
+      activePopup = new maplibregl.Popup({ closeOnClick: false, maxWidth: '280px' })
+        .setLngLat([lng, lat])
+        .setDOMContent(container)
+        .addTo(map)
+
+      // Close tracking
+      activePopup.on('close', () => { activePopup = null })
+
+      // Focus the name input after popup renders
+      setTimeout(() => nameInput.focus(), 50)
     })
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
+      activePopup?.remove()
       void clientRef.current?.disconnect()
       map.remove()
     }

@@ -16,7 +16,7 @@ func sendSnapshot(ctx context.Context, s *server, client *wsClient) error {
 	)
 
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(
-		`SELECT id::text, geom, properties, updated_at FROM datum.sync(%s, $1)`,
+		`SELECT id::text, geom, properties, updated_at::text FROM datum.sync(%s, $1)`,
 		bboxWKT,
 	), time.Time{}) // epoch — return everything in bbox
 	if err != nil {
