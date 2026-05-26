@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection } from 'geojson'
 import { DatumClient } from 'datum'
+import type { AppStatus } from './App.js'
 
 interface Props {
-  onStatusChange: (status: string) => void
+  onStatusChange: (status: AppStatus) => void
 }
 
 export function Map({ onStatusChange }: Props) {
@@ -20,9 +21,10 @@ export function Map({ onStatusChange }: Props) {
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://demotiles.maplibre.org/style.json',
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [0, 20],
       zoom: 2,
+      attributionControl: false,
     })
 
     // Track the active add-feature popup so we only ever show one at a time
@@ -37,7 +39,7 @@ export function Map({ onStatusChange }: Props) {
         id: 'features-layer',
         type: 'circle',
         source: 'features',
-        paint: { 'circle-radius': 8, 'circle-color': '#00aaff', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' },
+        paint: { 'circle-radius': 8, 'circle-color': '#2563eb', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' },
       })
 
       const bounds = map.getBounds()
@@ -46,7 +48,7 @@ export function Map({ onStatusChange }: Props) {
         bounds.getEast(), bounds.getNorth(),
       ]
 
-      onStatusChangeRef.current('Connecting to datum-server...')
+      onStatusChangeRef.current({ phase: 'connecting', text: 'Connecting…' })
 
       try {
         const client = await DatumClient.connect({
@@ -54,12 +56,12 @@ export function Map({ onStatusChange }: Props) {
           bbox,
         })
         clientRef.current = client
-        onStatusChangeRef.current('Connected — click map to add a feature')
+        onStatusChangeRef.current({ phase: 'ready', text: 'Ready — click map to drop a pin' })
 
         await refreshMap(map, client)
         intervalRef.current = setInterval(() => { void refreshMap(map, client) }, 3000)
       } catch (err) {
-        onStatusChangeRef.current(`Error: ${String(err)}`)
+        onStatusChangeRef.current({ phase: 'error', text: String(err) })
       }
     })
 
@@ -113,11 +115,14 @@ export function Map({ onStatusChange }: Props) {
           )
           activePopup?.remove()
           activePopup = null
-          onStatusChangeRef.current('Feature saved — syncing...')
+          onStatusChangeRef.current({ phase: 'saving', text: 'Saved — syncing…' })
+          setTimeout(() => {
+            onStatusChangeRef.current({ phase: 'ready', text: 'Ready — click map to drop a pin' })
+          }, 2000)
         } catch (err) {
           saveBtn.disabled = false
           saveBtn.textContent = 'Save feature'
-          onStatusChangeRef.current(`Error saving: ${String(err)}`)
+          onStatusChangeRef.current({ phase: 'error', text: `Save failed: ${String(err)}` })
         }
       }
 
