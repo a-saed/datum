@@ -48,7 +48,9 @@ All spatial intelligence lives in PostGIS. The Go server is replaceable.
 
 ## Architecture
 
-See [docs/superpowers/specs/2026-05-26-datum-design.md](docs/superpowers/specs/2026-05-26-datum-design.md).
+Client (PGlite + PostGIS WASM) ↔ WebSocket ↔ datum-server (Go, ~300 lines) ↔ pgx ↔ PostGIS
+
+All spatial logic lives in PostGIS SQL functions (`datum` schema). The Go server is a stateless protocol bridge — no spatial operations, fully replaceable.
 
 ## License
 
