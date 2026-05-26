@@ -18,21 +18,21 @@ export async function drainOutbox(db: PGlite): Promise<ChangeEvent[]> {
 
   if (res.rows.length === 0) return []
 
-  const edits: ChangeEvent[] = res.rows.map(row => ({
+  return res.rows.map(row => ({
     write_id: row.write_id,
     op: row.op as ChangeEvent['op'],
     feature_id: row.feature_id,
     data: row.data,
     updated_at: row.updated_at,
   }))
+}
 
-  const ids = edits.map(e => `'${e.write_id}'`).join(',')
-  await db.exec(`
-    UPDATE _datum_outbox SET synced = true
-    WHERE write_id IN (${ids})
-  `)
-
-  return edits
+export async function markSynced(db: PGlite, writeIds: string[]): Promise<void> {
+  if (writeIds.length === 0) return
+  await db.query(
+    `UPDATE _datum_outbox SET synced = true WHERE write_id = ANY($1::uuid[])`,
+    [writeIds]
+  )
 }
 
 // applyDelta applies a remote change to local PGlite.

@@ -2,7 +2,7 @@
 import type { PGlite } from '@electric-sql/pglite'
 import { v4 as uuidv4 } from 'uuid'
 import { bootLocalDb } from './pglite.js'
-import { drainOutbox, applyDelta } from './sync.js'
+import { drainOutbox, applyDelta, markSynced } from './sync.js'
 import { connectWS, sendMessage } from './ws.js'
 import type {
   DatumConfig,
@@ -38,10 +38,12 @@ export class DatumClient {
     const ws = connectWS(
       config.serverUrl,
       (msg) => {
-        void client.handleMessage(msg)
+        const p = client.handleMessage(msg)
         if (!snapshotReceived && msg.type === 'snapshot') {
           snapshotReceived = true
-          resolveReady()
+          void p.then(resolveReady)
+        } else {
+          void p
         }
       },
       () => {
@@ -111,6 +113,10 @@ export class DatumClient {
   private async pushOutbox(): Promise<void> {
     const edits = await drainOutbox(this.db)
     if (edits.length === 0) return
+    if (this.ws.readyState !== WebSocket.OPEN) return
     sendMessage(this.ws, { type: 'write', edits })
+    // Mark synced immediately after successful send (server ack not yet implemented in v0)
+    // This is still better than before-send, as we now gate on ws.readyState
+    await markSynced(this.db, edits.map(e => e.write_id))
   }
 }

@@ -17,7 +17,7 @@ export async function bootLocalDb(): Promise<PGlite> {
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_outbox (
-      write_id    UUID DEFAULT gen_random_uuid(),
+      write_id    UUID NOT NULL DEFAULT gen_random_uuid(),
       op          TEXT NOT NULL,
       feature_id  UUID NOT NULL,
       data        JSONB,
