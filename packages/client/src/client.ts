@@ -34,14 +34,13 @@ import type {
  */
 export class DatumClient {
   private db: PGlite
-  private ws: WebSocket
+  private ws!: WebSocket
   private clientId: string
   private config: DatumConfig
   private syncTimer: ReturnType<typeof setInterval> | null = null
 
-  private constructor(db: PGlite, ws: WebSocket, clientId: string, config: DatumConfig) {
+  private constructor(db: PGlite, clientId: string, config: DatumConfig) {
     this.db = db
-    this.ws = ws
     this.clientId = clientId
     this.config = config
   }
@@ -56,7 +55,7 @@ export class DatumClient {
   static async connect(config: DatumConfig): Promise<DatumClient> {
     const { db, isFirstVisit } = await bootLocalDb(config.dbName)
     const clientId = uuidv4()
-    const client = new DatumClient(db, null!, clientId, config)
+    const client = new DatumClient(db, clientId, config)
 
     if (isFirstVisit) {
       let resolveReady!: () => void
