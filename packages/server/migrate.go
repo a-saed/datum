@@ -12,7 +12,7 @@ import (
 )
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool, table string) error {
-	sql, err := os.ReadFile("../../sql/001_datum_schema.sql")
+	sql, err := os.ReadFile("./sql/001_datum_schema.sql")
 	if err != nil {
 		return fmt.Errorf("read migration: %w", err)
 	}
