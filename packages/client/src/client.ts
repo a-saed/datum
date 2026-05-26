@@ -61,8 +61,8 @@ export class DatumClient {
     return client
   }
 
-  query(sql: string, params?: unknown[]) {
-    return this.db.query(sql, params)
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]) {
+    return this.db.query<T>(sql, params)
   }
 
   exec(sql: string) {

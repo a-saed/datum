@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
+import type { FeatureCollection } from 'geojson'
 import { DatumClient } from 'datum'
 
 interface Props {
@@ -9,6 +10,10 @@ interface Props {
 export function Map({ onStatusChange }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const clientRef = useRef<DatumClient | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const onStatusChangeRef = useRef(onStatusChange)
+
+  useEffect(() => { onStatusChangeRef.current = onStatusChange }, [onStatusChange])
 
   useEffect(() => {
     if (!mapContainer.current) return
@@ -38,7 +43,7 @@ export function Map({ onStatusChange }: Props) {
         bounds.getEast(), bounds.getNorth(),
       ]
 
-      onStatusChange('Connecting to datum-server...')
+      onStatusChangeRef.current('Connecting to datum-server...')
 
       try {
         const client = await DatumClient.connect({
@@ -46,12 +51,12 @@ export function Map({ onStatusChange }: Props) {
           bbox,
         })
         clientRef.current = client
-        onStatusChange('Connected — click map to add features')
+        onStatusChangeRef.current('Connected — click map to add features')
 
         await refreshMap(map, client)
-        setInterval(() => { void refreshMap(map, client) }, 3000)
+        intervalRef.current = setInterval(() => { void refreshMap(map, client) }, 3000)
       } catch (err) {
-        onStatusChange(`Error: ${String(err)}`)
+        onStatusChangeRef.current(`Error: ${String(err)}`)
       }
     })
 
@@ -64,10 +69,11 @@ export function Map({ onStatusChange }: Props) {
          VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())`,
         [lng, lat, JSON.stringify({ name: `Point ${lng.toFixed(3)},${lat.toFixed(3)}` })]
       )
-      onStatusChange('Feature added — syncing...')
+      onStatusChangeRef.current('Feature added — syncing...')
     })
 
     return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
       void clientRef.current?.disconnect()
       map.remove()
     }
@@ -81,7 +87,7 @@ async function refreshMap(map: maplibregl.Map, client: DatumClient): Promise<voi
     `SELECT ST_X(geom) AS lon, ST_Y(geom) AS lat, properties->>'name' AS name FROM features`
   )
 
-  const geojson: GeoJSON.FeatureCollection = {
+  const geojson: FeatureCollection = {
     type: 'FeatureCollection',
     features: res.rows.map(row => ({
       type: 'Feature',
