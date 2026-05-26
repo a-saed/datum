@@ -85,14 +85,14 @@ func extractFirstCoordinate(geojson string) (float64, float64) {
 			return coords, lat
 		}
 	case "LineString", "MultiPoint":
-		if first, ok := g.Coordinates[0].([]interface{}); ok && len(first) >= 2 {
+		if first, ok := g.Coordinates[0].([]any); ok && len(first) >= 2 {
 			lon, _ := first[0].(float64)
 			lat, _ := first[1].(float64)
 			return lon, lat
 		}
 	case "Polygon", "MultiLineString":
-		if ring, ok := g.Coordinates[0].([]interface{}); ok && len(ring) > 0 {
-			if first, ok := ring[0].([]interface{}); ok && len(first) >= 2 {
+		if ring, ok := g.Coordinates[0].([]any); ok && len(ring) > 0 {
+			if first, ok := ring[0].([]any); ok && len(first) >= 2 {
 				lon, _ := first[0].(float64)
 				lat, _ := first[1].(float64)
 				return lon, lat
