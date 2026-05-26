@@ -8,17 +8,24 @@ import (
 	"time"
 )
 
-func sendSnapshot(ctx context.Context, s *server, client *wsClient) error {
+func sendSnapshot(ctx context.Context, s *server, client *wsClient, since string) error {
 	bbox := client.bbox
 	bboxWKT := fmt.Sprintf(
 		"ST_MakeEnvelope(%f, %f, %f, %f, 4326)",
 		bbox[0], bbox[1], bbox[2], bbox[3],
 	)
 
+	var sinceTime time.Time
+	if since != "" {
+		if t, err := time.Parse(time.RFC3339Nano, since); err == nil {
+			sinceTime = t
+		}
+	}
+
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(
 		`SELECT id::text, geom, properties, updated_at::text FROM datum.sync(%s, $1)`,
 		bboxWKT,
-	), time.Time{}) // epoch — return everything in bbox
+	), sinceTime)
 	if err != nil {
 		return fmt.Errorf("datum.sync query: %w", err)
 	}

@@ -97,7 +97,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			client.bbox = msg.BBox
 			s.addClient(client)
 
-			if err := sendSnapshot(r.Context(), s, client); err != nil {
+			if err := sendSnapshot(r.Context(), s, client, msg.Since); err != nil {
 				log.Printf("datum-server: snapshot error for %s: %v", client.id, err)
 			}
 

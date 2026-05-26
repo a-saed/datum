@@ -6,6 +6,7 @@ type SubscribeMessage struct {
 	Type     string     `json:"type"`
 	BBox     [4]float64 `json:"bbox"`
 	ClientID string     `json:"client_id"`
+	Since    string     `json:"since,omitempty"` // ISO-8601; empty = epoch (full snapshot)
 }
 
 type WriteEdit struct {

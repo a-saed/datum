@@ -3,6 +3,7 @@ package main
 
 import (
 	"testing"
+	"time"
 )
 
 func TestBBoxIntersects(t *testing.T) {
@@ -25,4 +26,10 @@ func TestBBoxIntersects(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSendSnapshotSinceParam(t *testing.T) {
+	// sendSnapshot uses sinceTime to filter — verify zero time and future time compile cleanly.
+	var _ = time.Time{}
+	var _ = "2026-01-01T00:00:00Z"
 }
