@@ -3,25 +3,23 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func runMigration(ctx context.Context, pool *pgxpool.Pool, table string) error {
-	sql, err := os.ReadFile("./sql/001_datum_schema.sql")
-	if err != nil {
-		return fmt.Errorf("read migration: %w", err)
-	}
+//go:embed sql/001_datum_schema.sql
+var migrationSQL string
 
+func runMigration(ctx context.Context, pool *pgxpool.Pool, table string) error {
 	// Substitute {{TABLE}} with a safely-quoted identifier.
 	quoted := pgx.Identifier{table}.Sanitize()
-	migrationSQL := strings.ReplaceAll(string(sql), "{{TABLE}}", quoted)
+	expanded := strings.ReplaceAll(migrationSQL, "{{TABLE}}", quoted)
 
-	_, err = pool.Exec(ctx, migrationSQL)
+	_, err := pool.Exec(ctx, expanded)
 	if err != nil {
 		return fmt.Errorf("run migration: %w", err)
 	}
