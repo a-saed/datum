@@ -21,33 +21,30 @@ type wsClient struct {
 }
 
 type server struct {
-	pool          *pgxpool.Pool
-	table         string
-	port          string
-	allowedOrigin string
-	clients       map[string]*wsClient
-	mu            sync.RWMutex
+	pool     *pgxpool.Pool
+	table    string
+	port     string
+	upgrader websocket.Upgrader
+	clients  map[string]*wsClient
+	mu       sync.RWMutex
 }
 
 func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string) *server {
-	return &server{
-		pool:          pool,
-		table:         table,
-		port:          port,
-		allowedOrigin: allowedOrigin,
-		clients:       make(map[string]*wsClient),
+	s := &server{
+		pool:    pool,
+		table:   table,
+		port:    port,
+		clients: make(map[string]*wsClient),
 	}
-}
-
-func (s *server) upgrader() websocket.Upgrader {
-	return websocket.Upgrader{
+	s.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			if s.allowedOrigin == "*" {
+			if allowedOrigin == "*" {
 				return true
 			}
-			return r.Header.Get("Origin") == s.allowedOrigin
+			return r.Header.Get("Origin") == allowedOrigin
 		},
 	}
+	return s
 }
 
 func (s *server) run(ctx context.Context) error {
@@ -63,8 +60,7 @@ func (s *server) run(ctx context.Context) error {
 }
 
 func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
-	u := s.upgrader()
-	conn, err := u.Upgrade(w, r, nil)
+	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("datum-server: ws upgrade: %v", err)
 		return
