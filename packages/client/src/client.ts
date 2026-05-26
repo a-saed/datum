@@ -47,48 +47,58 @@ export class DatumClient {
   }
 
   /**
-   * Connect to datum-server and load the initial snapshot into local PGlite.
+   * Connect to datum-server and load features into local PGlite.
    *
-   * Resolves once the snapshot has been fully written to the local database —
-   * the client is immediately queryable offline after this point.
-   *
-   * @param config - Server URL, bounding box, and optional sync interval.
-   * @throws If the WebSocket connection fails or the snapshot times out.
+   * - First visit: awaits the full snapshot before resolving (~3s).
+   * - Returning visit: resolves immediately with local data (~200ms),
+   *   then catches up with server changes in the background.
    */
   static async connect(config: DatumConfig): Promise<DatumClient> {
-    const { db } = await bootLocalDb()
+    const { db, isFirstVisit } = await bootLocalDb(config.dbName)
     const clientId = uuidv4()
-
-    let resolveReady!: () => void
-    const ready = new Promise<void>(resolve => { resolveReady = resolve })
-
     const client = new DatumClient(db, null!, clientId, config)
 
-    let snapshotReceived = false
-    const ws = connectWS(
-      config.serverUrl,
-      (msg) => {
-        const p = client.handleMessage(msg)
-        if (!snapshotReceived && msg.type === 'snapshot') {
-          snapshotReceived = true
-          void p.then(resolveReady)
-        } else {
-          void p
-        }
-      },
-      () => {
-        sendMessage(ws, {
-          type: 'subscribe',
-          bbox: config.bbox,
-          client_id: clientId,
-        })
-      },
-    )
+    if (isFirstVisit) {
+      let resolveReady!: () => void
+      const ready = new Promise<void>(resolve => { resolveReady = resolve })
 
-    client.ws = ws
-    await ready
-    client.startSyncCycle()
-    return client
+      let snapshotReceived = false
+      const ws = connectWS(
+        config.serverUrl,
+        (msg) => {
+          const p = client.handleMessage(msg)
+          if (!snapshotReceived && msg.type === 'snapshot') {
+            snapshotReceived = true
+            void p.then(resolveReady)
+          } else {
+            void p
+          }
+        },
+        () => {
+          sendMessage(ws, {
+            type: 'subscribe',
+            bbox: config.bbox,
+            client_id: clientId,
+          })
+        },
+      )
+
+      client.ws = ws
+      await ready
+      client.startSyncCycle()
+      return client
+    } else {
+      // Returning visit — resolve immediately, catch up in background
+      const ws = connectWS(
+        config.serverUrl,
+        (msg) => { void client.handleMessage(msg) },
+        () => { void client.sendSubscribeWithSince() },
+      )
+
+      client.ws = ws
+      client.startSyncCycle()
+      return client
+    }
   }
 
   /**
@@ -111,7 +121,6 @@ export class DatumClient {
 
   /**
    * Stop the sync cycle and close the WebSocket connection.
-   * The local PGlite database is discarded (in-memory only).
    */
   async disconnect(): Promise<void> {
     if (this.syncTimer) clearInterval(this.syncTimer)
@@ -149,6 +158,20 @@ export class DatumClient {
     }
   }
 
+  // On returning visits, send subscribe with the latest local timestamp so the
+  // server only returns features changed since the last sync.
+  private async sendSubscribeWithSince(): Promise<void> {
+    const { rows } = await this.db.query<{ since: string }>(
+      `SELECT COALESCE(MAX(updated_at)::text, '1970-01-01T00:00:00Z') AS since FROM features`
+    )
+    sendMessage(this.ws, {
+      type: 'subscribe',
+      bbox: this.config.bbox,
+      client_id: this.clientId,
+      since: rows[0].since,
+    })
+  }
+
   private startSyncCycle(): void {
     const interval = this.config.syncInterval ?? 5000
     this.syncTimer = setInterval(() => { void this.pushOutbox() }, interval)
@@ -159,8 +182,6 @@ export class DatumClient {
     if (edits.length === 0) return
     if (this.ws.readyState !== WebSocket.OPEN) return
     sendMessage(this.ws, { type: 'write', edits })
-    // Mark synced immediately after successful send (server ack not yet implemented in v0)
-    // This is still better than before-send, as we now gate on ws.readyState
     await markSynced(this.db, edits.map(e => e.write_id))
   }
 }

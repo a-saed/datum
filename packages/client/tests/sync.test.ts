@@ -105,3 +105,26 @@ describe('applyDelta', () => {
     expect(String(res.rows[0].count)).toBe('0')
   })
 })
+
+describe('since timestamp derivation', () => {
+  it('MAX(updated_at) returns epoch string when table is empty', async () => {
+    const { rows } = await db.query<{ since: string }>(
+      `SELECT COALESCE(MAX(updated_at)::text, '1970-01-01T00:00:00Z') AS since FROM features`
+    )
+    expect(rows[0].since).toBe('1970-01-01T00:00:00Z')
+  })
+
+  it('MAX(updated_at) returns latest timestamp when features exist', async () => {
+    await db.exec(`ALTER TABLE features DISABLE TRIGGER datum_capture_changes`)
+    await db.query(
+      `INSERT INTO features (geom, properties, updated_at)
+       VALUES (ST_SetSRID(ST_MakePoint(0,0),4326), '{}', '2026-05-01T12:00:00Z'::timestamptz)`
+    )
+    await db.exec(`ALTER TABLE features ENABLE TRIGGER datum_capture_changes`)
+
+    const { rows } = await db.query<{ since: string }>(
+      `SELECT COALESCE(MAX(updated_at)::text, '1970-01-01T00:00:00Z') AS since FROM features`
+    )
+    expect(rows[0].since).toContain('2026-05-01')
+  })
+})

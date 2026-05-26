@@ -37,6 +37,12 @@ export interface DatumConfig {
    * @default 5000
    */
   syncInterval?: number
+  /**
+   * IndexedDB database name. Use distinct names when running multiple
+   * datum instances on the same origin.
+   * @default "datum"
+   */
+  dbName?: string
 }
 
 /** A spatial feature as returned by the server snapshot or delta. */
@@ -57,6 +63,7 @@ export interface SubscribeMessage {
   type: 'subscribe'
   bbox: [number, number, number, number]
   client_id: string
+  since?: string // ISO-8601; omitted on first visit (server returns full snapshot)
 }
 
 export interface WriteMessage {
