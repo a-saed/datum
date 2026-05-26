@@ -1,4 +1,6 @@
 // packages/client/src/types.ts
+
+/** Geographic bounding box in WGS-84 (EPSG:4326). */
 export interface BBox {
   minX: number
   minY: number
@@ -6,8 +8,10 @@ export interface BBox {
   maxY: number
 }
 
+/** The type of a local write operation captured by the outbox trigger. */
 export type ChangeOp = 'insert' | 'update' | 'delete'
 
+/** A single pending write captured from the local PGlite outbox. */
 export interface ChangeEvent {
   write_id: string
   op: ChangeOp
@@ -16,20 +20,39 @@ export interface ChangeEvent {
   updated_at: string
 }
 
+/**
+ * Configuration passed to {@link DatumClient.connect}.
+ */
 export interface DatumConfig {
+  /** WebSocket URL of datum-server, e.g. `ws://localhost:3000/ws`. */
   serverUrl: string
-  bbox: [number, number, number, number] // [minX, minY, maxX, maxY]
-  syncInterval?: number // ms, default 5000
+  /**
+   * Bounding box to sync, as `[minX, minY, maxX, maxY]` in WGS-84.
+   * Only features whose geometry intersects this box are synced.
+   * @example [-122.5, 37.7, -122.4, 37.8]
+   */
+  bbox: [number, number, number, number]
+  /**
+   * How often (in milliseconds) to push local writes to the server.
+   * @default 5000
+   */
+  syncInterval?: number
 }
 
+/** A spatial feature as returned by the server snapshot or delta. */
 export interface Feature {
+  /** UUID primary key. */
   id: string
-  geom: string // GeoJSON string
+  /** GeoJSON geometry string. */
+  geom: string
+  /** Arbitrary JSON properties. */
   properties: Record<string, unknown>
+  /** ISO-8601 timestamp of last modification. */
   updated_at: string
 }
 
-// Wire protocol
+// Wire protocol — internal, not part of the public API
+
 export interface SubscribeMessage {
   type: 'subscribe'
   bbox: [number, number, number, number]

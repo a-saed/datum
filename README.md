@@ -59,6 +59,10 @@ docker run ghcr.io/a-saed/datum-server \
 
 The default `*` allows all origins and is only suitable for local development.
 
+## Documentation
+
+- [API reference](docs/api.md) — TypeScript client, server flags, wire protocol, SQL functions
+
 ## Architecture
 
 Client (PGlite + PostGIS WASM) ↔ WebSocket ↔ datum-server (Go, ~300 lines) ↔ pgx ↔ PostGIS

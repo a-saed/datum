@@ -11,6 +11,27 @@ import type {
   DeltaMessage,
 } from './types.js'
 
+/**
+ * Local-first spatial sync client backed by PGlite + PostGIS WASM.
+ *
+ * All `query()` calls execute against a local in-browser Postgres instance —
+ * no network round-trip required. Writes are captured automatically and
+ * pushed to datum-server on a background sync cycle.
+ *
+ * @example
+ * ```ts
+ * const db = await DatumClient.connect({
+ *   serverUrl: 'ws://localhost:3000/ws',
+ *   bbox: [-122.5, 37.7, -122.4, 37.8],
+ * })
+ *
+ * const result = await db.query<{ name: string }>(
+ *   `SELECT properties->>'name' AS name FROM features`
+ * )
+ *
+ * await db.disconnect()
+ * ```
+ */
 export class DatumClient {
   private db: PGlite
   private ws: WebSocket
@@ -25,6 +46,15 @@ export class DatumClient {
     this.config = config
   }
 
+  /**
+   * Connect to datum-server and load the initial snapshot into local PGlite.
+   *
+   * Resolves once the snapshot has been fully written to the local database —
+   * the client is immediately queryable offline after this point.
+   *
+   * @param config - Server URL, bounding box, and optional sync interval.
+   * @throws If the WebSocket connection fails or the snapshot times out.
+   */
   static async connect(config: DatumConfig): Promise<DatumClient> {
     const db = await bootLocalDb()
     const clientId = uuidv4()
@@ -61,6 +91,16 @@ export class DatumClient {
     return client
   }
 
+  /**
+   * Run a SQL query against the local PGlite database. No network involved.
+   *
+   * Supports full PostGIS — `ST_Intersects`, `ST_Area`, spatial joins, etc.
+   * Writes (`INSERT`, `UPDATE`, `DELETE`) are captured automatically by the
+   * outbox trigger and pushed to the server on the next sync cycle.
+   *
+   * @param sql - Parameterised SQL string. Use `$1`, `$2`, … for parameters.
+   * @param params - Parameter values corresponding to `$1`, `$2`, …
+   */
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]) {
     return this.db.query<T>(sql, params)
   }
@@ -69,6 +109,10 @@ export class DatumClient {
     return this.db.exec(sql)
   }
 
+  /**
+   * Stop the sync cycle and close the WebSocket connection.
+   * The local PGlite database is discarded (in-memory only).
+   */
   async disconnect(): Promise<void> {
     if (this.syncTimer) clearInterval(this.syncTimer)
     this.ws.close()
