@@ -1,10 +1,19 @@
--- packages/server/sql/001_datum_schema.sql
--- Copy of sql/001_datum_schema.sql required for go:embed — edit the root sql/ file, not this one.
+-- sql/001_datum_schema.sql
 -- Datum sync protocol schema.
 -- {{TABLE}} is replaced by datum-server with the configured table name (quoted identifier).
 -- Run this migration via datum-server on startup; it is idempotent.
 
 CREATE SCHEMA IF NOT EXISTS datum;
+
+-- Create the sync table if it doesn't exist yet.
+-- Users with an existing table can skip this — it is a no-op if the table is already there.
+CREATE TABLE IF NOT EXISTS {{TABLE}} (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    geom        GEOMETRY(Geometry, 4326) NOT NULL,
+    properties  JSONB       NOT NULL DEFAULT '{}',
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS {{TABLE_NAME}}_geom_idx ON {{TABLE}} USING GIST (geom);
 
 -- Returns features from {{TABLE}} that intersect p_bbox and were updated after p_since.
 -- Used for initial snapshot and incremental catch-up.

@@ -15,9 +15,12 @@ import (
 var migrationSQL string
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool, table string) error {
-	// Substitute {{TABLE}} with a safely-quoted identifier.
+	// {{TABLE}} → quoted identifier (e.g. "features") for use in SQL expressions.
+	// {{TABLE_NAME}} → unquoted name for use in identifier positions like index names.
+	// The table name is pre-validated by regex so it is safe unquoted.
 	quoted := pgx.Identifier{table}.Sanitize()
 	expanded := strings.ReplaceAll(migrationSQL, "{{TABLE}}", quoted)
+	expanded = strings.ReplaceAll(expanded, "{{TABLE_NAME}}", table)
 
 	_, err := pool.Exec(ctx, expanded)
 	if err != nil {
