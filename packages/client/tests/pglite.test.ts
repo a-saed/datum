@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { postgis } from '@electric-sql/pglite-postgis'
+import { bootLocalDb } from '../src/pglite.js'
 
 let db: PGlite
 
@@ -81,5 +82,40 @@ describe('PostGIS WASM spike — required functions', () => {
       `SELECT ST_AsText(ST_Transform(ST_SetSRID(ST_MakePoint(0, 0), 4326), 3857)) AS g`
     )
     expect(res.rows[0].g).toContain('POINT')
+  })
+})
+
+describe('bootLocalDb', () => {
+  it('creates the features table', async () => {
+    const local = await bootLocalDb()
+    const res = await local.query<{ count: string | number }>(
+      `SELECT COUNT(*) AS count FROM features`
+    )
+    expect(String(res.rows[0].count)).toBe('0')
+  })
+
+  it('creates the _datum_outbox table', async () => {
+    const local = await bootLocalDb()
+    const res = await local.query<{ count: string | number }>(
+      `SELECT COUNT(*) AS count FROM _datum_outbox`
+    )
+    expect(String(res.rows[0].count)).toBe('0')
+  })
+
+  it('trigger writes to outbox on INSERT', async () => {
+    const local = await bootLocalDb()
+    await local.query(
+      `INSERT INTO features (id, geom, properties, updated_at)
+       VALUES (
+         gen_random_uuid(),
+         ST_SetSRID(ST_MakePoint(10, 20), 4326),
+         '{"name":"test"}',
+         now()
+       )`
+    )
+    const res = await local.query<{ op: string }>(
+      `SELECT op FROM _datum_outbox LIMIT 1`
+    )
+    expect(res.rows[0].op).toBe('insert')
   })
 })
