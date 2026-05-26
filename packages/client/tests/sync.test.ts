@@ -106,15 +106,18 @@ describe('applyDelta', () => {
   })
 })
 
+const sinceQuery = `SELECT COALESCE(
+  to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  '1970-01-01T00:00:00Z'
+) AS since FROM features`
+
 describe('since timestamp derivation', () => {
-  it('MAX(updated_at) returns epoch string when table is empty', async () => {
-    const { rows } = await db.query<{ since: string }>(
-      `SELECT COALESCE(MAX(updated_at)::text, '1970-01-01T00:00:00Z') AS since FROM features`
-    )
+  it('returns epoch string when table is empty', async () => {
+    const { rows } = await db.query<{ since: string }>(sinceQuery)
     expect(rows[0].since).toBe('1970-01-01T00:00:00Z')
   })
 
-  it('MAX(updated_at) returns latest timestamp when features exist', async () => {
+  it('returns RFC3339 UTC timestamp when features exist', async () => {
     await db.exec(`ALTER TABLE features DISABLE TRIGGER datum_capture_changes`)
     await db.query(
       `INSERT INTO features (geom, properties, updated_at)
@@ -122,9 +125,8 @@ describe('since timestamp derivation', () => {
     )
     await db.exec(`ALTER TABLE features ENABLE TRIGGER datum_capture_changes`)
 
-    const { rows } = await db.query<{ since: string }>(
-      `SELECT COALESCE(MAX(updated_at)::text, '1970-01-01T00:00:00Z') AS since FROM features`
-    )
-    expect(rows[0].since).toContain('2026-05-01')
+    const { rows } = await db.query<{ since: string }>(sinceQuery)
+    // Must be RFC3339 so Go's time.Parse(time.RFC3339Nano) can parse it
+    expect(rows[0].since).toBe('2026-05-01T12:00:00Z')
   })
 })

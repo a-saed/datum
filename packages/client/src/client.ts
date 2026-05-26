@@ -161,7 +161,10 @@ export class DatumClient {
   // server only returns features changed since the last sync.
   private async sendSubscribeWithSince(): Promise<void> {
     const { rows } = await this.db.query<{ since: string }>(
-      `SELECT COALESCE(MAX(updated_at)::text, '1970-01-01T00:00:00Z') AS since FROM features`
+      `SELECT COALESCE(
+         to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+         '1970-01-01T00:00:00Z'
+       ) AS since FROM features`
     )
     sendMessage(this.ws, {
       type: 'subscribe',
