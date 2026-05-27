@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Datum',
   description: 'Local-first spatial sync for PostGIS.',
+  base: '/datum/',
   srcExclude: ['**/superpowers/**'],
   ignoreDeadLinks: [/localhost/],
   head: [['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }]],
