@@ -11,3 +11,7 @@ packages/server/*.exe
 
 # Internal planning artifacts
 docs/superpowers/
+
+# VitePress
+docs/.vitepress/dist
+docs/.vitepress/cache

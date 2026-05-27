@@ -1,6 +1,10 @@
-# Datum API Reference
+---
+title: API Reference
+---
 
-## TypeScript client (`datum`)
+# API Reference
+
+## TypeScript client (`datum-sync`)
 
 ### `DatumClient.connect(config)`
 
@@ -20,6 +24,7 @@ const db = await DatumClient.connect({
 | `serverUrl` | `string` | Yes | WebSocket URL of datum-server |
 | `bbox` | `[minX, minY, maxX, maxY]` | Yes | Bounding box in WGS-84. Only features intersecting this box are synced. |
 | `syncInterval` | `number` (ms) | No | How often local writes are pushed to the server. Default: `5000` |
+| `dbName` | `string` | No | IndexedDB database name. Use distinct names when running multiple datum instances on the same origin. Default: `"datum"` |
 
 ---
 
@@ -100,9 +105,12 @@ datum-server speaks JSON over WebSocket at `/ws`.
 {
   "type": "subscribe",
   "bbox": [-122.5, 37.7, -122.4, 37.8],
-  "client_id": "uuid"
+  "client_id": "uuid",
+  "since": "2026-05-01T00:00:00Z"
 }
 ```
+
+`since` is an ISO-8601 timestamp. Omit it (or set it to the epoch) to receive the full snapshot. On returning visits, datum automatically sets this to `MAX(updated_at)` from the local database so the server only returns changed features.
 
 **Write** — push local edits to the server:
 ```json
