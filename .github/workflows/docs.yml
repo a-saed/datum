@@ -22,8 +22,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build client
+        run: npm run build -w datum-sync
+
       - name: Build docs
         run: npm run docs:build
+
+      - name: Build demo
+        run: npm run build -w datum-demo
+        env:
+          VITE_BASE_URL: /datum/demo/
+          VITE_DATUM_SERVER_URL: ${{ vars.DATUM_SERVER_URL }}
+
+      - name: Copy demo into docs output
+        run: mkdir -p docs/.vitepress/dist/demo && cp -r demo/dist/* docs/.vitepress/dist/demo/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
