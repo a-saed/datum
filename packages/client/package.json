@@ -1,6 +1,6 @@
 {
   "name": "datum-sync",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Local-first spatial sync for PostGIS. A bounding box is a first-class live sync subscription.",
   "keywords": [
     "postgis",
@@ -52,7 +52,9 @@
     "react": ">=18"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18",
