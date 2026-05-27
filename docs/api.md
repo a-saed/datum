@@ -64,6 +64,94 @@ await db.disconnect()
 
 ---
 
+### `db.onChange(callback)`
+
+Subscribes to local database changes. The callback fires after any `INSERT`/`UPDATE`/`DELETE` executed via `query()` and after every sync event from the server (snapshot or delta). Returns an unsubscribe function.
+
+```ts
+const unsubscribe = db.onChange(() => {
+  console.log('DB changed — re-render')
+})
+
+// Later:
+unsubscribe()
+```
+
+Prefer `useDatum` in React apps — it wires this up automatically.
+
+---
+
+## React hooks (`datum-sync/react`)
+
+```bash
+npm install datum-sync   # one package — React hook is included
+```
+
+```ts
+import { useDatum } from 'datum-sync/react'
+```
+
+### `useDatum<T>(client, sql, params?)`
+
+Runs a SQL query against the local PGlite database and re-runs it automatically whenever the database changes — either from a local write or a delta from the server. No polling needed.
+
+```tsx
+const { rows, loading, error } = useDatum<{ name: string; lat: number; lon: number }>(
+  client,
+  `SELECT properties->>'name' AS name,
+          ST_Y(geom) AS lat,
+          ST_X(geom) AS lon
+   FROM features`
+)
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `client` | `DatumClient \| null` | The connected client. Pass `null` while connecting — hook returns empty rows and `loading: true`. |
+| `sql` | `string` | SQL query to run against local PGlite. |
+| `params` | `unknown[]` | Optional query parameters (`$1`, `$2`, …). |
+
+**Returns:**
+
+| Field | Type | Description |
+|---|---|---|
+| `rows` | `T[]` | Query results. Empty array while loading or on error. |
+| `loading` | `boolean` | `true` until the first query completes. |
+| `error` | `Error \| null` | Set if the query throws. |
+
+**Example — full component:**
+
+```tsx
+import { useState, useEffect } from 'react'
+import { DatumClient } from 'datum-sync'
+import { useDatum } from 'datum-sync/react'
+
+function FeatureList() {
+  const [client, setClient] = useState<DatumClient | null>(null)
+
+  useEffect(() => {
+    DatumClient.connect({
+      serverUrl: 'ws://localhost:3000/ws',
+      bbox: [-180, -90, 180, 90],
+    }).then(setClient)
+
+    return () => { void client?.disconnect() }
+  }, [])
+
+  const { rows, loading } = useDatum<{ name: string }>(
+    client,
+    `SELECT properties->>'name' AS name FROM features ORDER BY updated_at DESC`
+  )
+
+  if (loading) return <p>Connecting…</p>
+  return <ul>{rows.map((r, i) => <li key={i}>{r.name}</li>)}</ul>
+}
+```
+
+---
+
 ## datum-server (Go binary)
 
 ### Flags

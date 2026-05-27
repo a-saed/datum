@@ -47,8 +47,37 @@ Click anywhere on the map. Enter a name in the popup and click **Save feature**.
 
 Open a second browser tab at [http://localhost:5173](http://localhost:5173). Features added in the first tab appear in the second tab within 5 seconds (the default sync interval).
 
+## Using datum-sync in your own app
+
+Install the package:
+
+```bash
+npm install datum-sync
+```
+
+Connect and query:
+
+```ts
+import { DatumClient } from 'datum-sync'
+
+const db = await DatumClient.connect({
+  serverUrl: 'ws://your-server/ws',
+  bbox: [-122.5, 37.7, -122.4, 37.8],
+})
+
+const result = await db.query(`SELECT * FROM features`)
+```
+
+In React, use the `useDatum` hook for reactive queries that update automatically:
+
+```tsx
+import { useDatum } from 'datum-sync/react'
+
+const { rows } = useDatum(db, `SELECT * FROM features`)
+```
+
 ## Next steps
 
 - [How It Works](/how-it-works) — understand the local-first model, bbox subscriptions, and sync cycle
-- [API Reference](/api) — full TypeScript client and server documentation
+- [API Reference](/api) — full TypeScript client, React hooks, and server documentation
 - [Self-Hosting](/self-hosting) — deploy to production (free-tier guide included)
