@@ -25,7 +25,6 @@ func main() {
 	table         := flag.String("table",          envOr("TABLE", ""),          "Table name to sync (required)")
 	port          := flag.String("port",           envOr("PORT", "3000"),       "Port to listen on")
 	allowedOrigin := flag.String("allowed-origin", envOr("ALLOWED_ORIGIN", "*"), "Allowed WebSocket origin (e.g. https://myapp.com). Use * to allow all (dev only)")
-	authToken     := flag.String("auth-token",     envOr("AUTH_TOKEN", ""),     "Shared secret token. If set, clients must pass ?token=<value> in the WebSocket URL.")
 	flag.Parse()
 
 	if *dbURL == "" {
@@ -51,7 +50,7 @@ func main() {
 	}
 	log.Printf("datum-server: migration applied to table %q", *table)
 
-	srv := newServer(pool, *table, *port, *allowedOrigin, *authToken)
+	srv := newServer(pool, *table, *port, *allowedOrigin)
 	log.Printf("datum-server: listening on :%s", *port)
 	log.Fatal(srv.run(ctx))
 }

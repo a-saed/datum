@@ -33,7 +33,6 @@ jobs:
         env:
           VITE_BASE_URL: /datum/demo/
           VITE_DATUM_SERVER_URL: ${{ vars.DATUM_SERVER_URL }}
-          VITE_DATUM_AUTH_TOKEN: ${{ secrets.DATUM_AUTH_TOKEN }}
 
       - name: Copy demo into docs output
         run: mkdir -p docs/.vitepress/dist/demo && cp -r demo/dist/* docs/.vitepress/dist/demo/

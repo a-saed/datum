@@ -43,12 +43,6 @@ export interface DatumConfig {
    * @default "datum"
    */
   dbName?: string
-  /**
-   * Shared secret token. Must match the `-auth-token` flag on datum-server.
-   * Passed as `?token=<value>` in the WebSocket URL.
-   * If omitted, no token is sent (server must also have no token configured).
-   */
-  token?: string
 }
 
 /** A spatial feature as returned by the server snapshot or delta. */
