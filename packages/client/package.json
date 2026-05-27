@@ -1,6 +1,20 @@
 {
-  "name": "datum",
-  "version": "0.0.1",
+  "name": "@a-saed/datum",
+  "version": "0.1.0",
+  "description": "Local-first spatial sync for PostGIS. A bounding box is a first-class live sync subscription.",
+  "keywords": ["postgis", "spatial", "sync", "local-first", "pglite", "geospatial", "maps"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a-saed/datum.git"
+  },
+  "homepage": "https://a-saed.github.io/datum",
+  "bugs": {
+    "url": "https://github.com/a-saed/datum/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
