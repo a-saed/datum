@@ -4,9 +4,6 @@ layout: home
 hero:
   name: "datum"
   tagline: "Local-first spatial sync for PostGIS."
-  image:
-    src: /logo.svg
-    alt: Datum
   actions:
     - theme: brand
       text: Get Started
