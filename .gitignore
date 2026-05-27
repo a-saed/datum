@@ -12,6 +12,9 @@ packages/server/*.exe
 # Internal planning artifacts
 docs/superpowers/
 
+# Marketing content (articles, blogs, launch posts)
+marketing/
+
 # VitePress
 docs/.vitepress/dist
 docs/.vitepress/cache
