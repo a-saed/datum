@@ -262,6 +262,24 @@ Deltas are only sent to clients whose bounding box intersects the changed featur
 
 Installed automatically by datum-server on startup. Idempotent — safe to run multiple times.
 
+### Required table schema
+
+datum-server creates the table if it does not exist. If you are bringing an **existing** PostGIS table, it must have these four columns:
+
+```sql
+id          UUID        PRIMARY KEY DEFAULT gen_random_uuid()
+geom        GEOMETRY(Geometry, 4326) NOT NULL
+properties  JSONB       NOT NULL DEFAULT '{}'
+updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+```
+
+- **`id`** — stable UUID primary key, used for conflict resolution.
+- **`geom`** — any PostGIS geometry type, in WGS-84 (EPSG:4326). Points, lines, and polygons all work.
+- **`properties`** — free-form JSON for any additional attributes (name, type, tags, etc.).
+- **`updated_at`** — last-write-wins conflict resolution is based on this column. Always set it to `now()` on insert/update.
+
+datum-server will also install a spatial index on `geom` and attach the `datum_capture_changes` outbox trigger to the table.
+
 ### `datum.sync(p_bbox, p_since)`
 
 Returns all features from the configured table that intersect `p_bbox` and were updated after `p_since`. Used for the initial snapshot and incremental catch-up.
