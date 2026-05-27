@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { DatumClient } from 'datum-sync'
+import type { DatumClient } from './client.js'
 
 export function useDatum<T = Record<string, unknown>>(
   client: DatumClient | null,

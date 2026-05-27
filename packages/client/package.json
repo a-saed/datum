@@ -30,6 +30,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react.js",
+      "types": "./dist/react.d.ts"
     }
   },
   "files": [
@@ -44,9 +48,16 @@
     "@electric-sql/pglite-postgis": "^0.0.8",
     "uuid": "^10.0.0"
   },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
   "devDependencies": {
+    "@types/react": "^18",
+    "@types/uuid": "^10.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0",
-    "@types/uuid": "^10.0.0"
+    "vitest": "^1.6.0"
   }
 }
