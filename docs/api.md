@@ -280,6 +280,10 @@ updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 
 datum-server will also install a spatial index on `geom` and attach the `datum_capture_changes` outbox trigger to the table.
 
+::: warning Existing tables
+If your table has typed columns (`name TEXT`, `height FLOAT`, etc.) rather than a `properties JSONB` bag, you cannot use datum directly against it today. Configurable column mapping — letting you point datum at any existing PostGIS table — is on the [roadmap](https://github.com/a-saed/datum/blob/main/ROADMAP.md).
+:::
+
 ### `datum.sync(p_bbox, p_since)`
 
 Returns all features from the configured table that intersect `p_bbox` and were updated after `p_since`. Used for the initial snapshot and incremental catch-up.
