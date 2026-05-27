@@ -57,13 +57,17 @@ export class DatumClient {
     const clientId = uuidv4()
     const client = new DatumClient(db, clientId, config)
 
+    const wsUrl = config.token
+      ? `${config.serverUrl}?token=${encodeURIComponent(config.token)}`
+      : config.serverUrl
+
     if (isFirstVisit) {
       let resolveReady!: () => void
       const ready = new Promise<void>(resolve => { resolveReady = resolve })
 
       let snapshotReceived = false
       const ws = connectWS(
-        config.serverUrl,
+        wsUrl,
         (msg) => {
           const p = client.handleMessage(msg)
           if (!snapshotReceived && msg.type === 'snapshot') {
@@ -89,7 +93,7 @@ export class DatumClient {
     } else {
       // Returning visit — resolve immediately, catch up in background
       const ws = connectWS(
-        config.serverUrl,
+        wsUrl,
         (msg) => { void client.handleMessage(msg) },
         () => { void client.sendSubscribeWithSince() },
       )

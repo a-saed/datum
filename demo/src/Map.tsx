@@ -54,6 +54,7 @@ export function Map({ onStatusChange }: Props) {
         const client = await DatumClient.connect({
           serverUrl: import.meta.env.VITE_DATUM_SERVER_URL ?? 'ws://localhost:3000/ws',
           bbox,
+          token: import.meta.env.VITE_DATUM_AUTH_TOKEN,
         })
         clientRef.current = client
         onStatusChangeRef.current({ phase: 'ready', text: 'Ready — click map to drop a pin' })

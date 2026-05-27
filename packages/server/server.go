@@ -22,20 +22,22 @@ type wsClient struct {
 }
 
 type server struct {
-	pool     *pgxpool.Pool
-	table    string
-	port     string
-	upgrader websocket.Upgrader
-	clients  map[string]*wsClient
-	mu       sync.RWMutex
+	pool      *pgxpool.Pool
+	table     string
+	port      string
+	authToken string
+	upgrader  websocket.Upgrader
+	clients   map[string]*wsClient
+	mu        sync.RWMutex
 }
 
-func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string) *server {
+func newServer(pool *pgxpool.Pool, table, port, allowedOrigin, authToken string) *server {
 	s := &server{
-		pool:    pool,
-		table:   table,
-		port:    port,
-		clients: make(map[string]*wsClient),
+		pool:      pool,
+		table:     table,
+		port:      port,
+		authToken: authToken,
+		clients:   make(map[string]*wsClient),
 	}
 	s.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -67,6 +69,11 @@ func (s *server) run(ctx context.Context) error {
 }
 
 func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
+	if s.authToken != "" && r.URL.Query().Get("token") != s.authToken {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("datum-server: ws upgrade: %v", err)
