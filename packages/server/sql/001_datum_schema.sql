@@ -81,8 +81,8 @@ BEGIN
         payload := jsonb_build_object(
             'op',               'delete',
             'id',               OLD.id,
-            'geom',             NULL,
-            'properties',       NULL,
+            'geom',             ST_AsGeoJSON(OLD.geom),
+            'properties',       OLD.properties,
             'updated_at',       OLD.updated_at,
             'origin_client_id', current_setting('datum.client_id', true)
         );
