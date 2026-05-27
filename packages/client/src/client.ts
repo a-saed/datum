@@ -38,6 +38,8 @@ export class DatumClient {
   private clientId: string
   private config: DatumConfig
   private syncTimer: ReturnType<typeof setInterval> | null = null
+  private changeListeners = new Set<() => void>()
+  private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
 
   private constructor(db: PGlite, clientId: string, config: DatumConfig) {
     this.db = db
@@ -111,7 +113,21 @@ export class DatumClient {
    * @param params - Parameter values corresponding to `$1`, `$2`, …
    */
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]) {
-    return this.db.query<T>(sql, params)
+    const result = this.db.query<T>(sql, params)
+    if (DatumClient.MUTATION_RE.test(sql)) {
+      void result.then(() => this.notifyChange())
+    }
+    return result
+  }
+
+  /**
+   * Subscribe to local database changes. Fires after any INSERT/UPDATE/DELETE
+   * executed via `query()` and after every sync event from the server.
+   * Returns an unsubscribe function.
+   */
+  onChange(cb: () => void): () => void {
+    this.changeListeners.add(cb)
+    return () => this.changeListeners.delete(cb)
   }
 
   exec(sql: string) {
@@ -126,11 +142,17 @@ export class DatumClient {
     this.ws.close()
   }
 
+  private notifyChange(): void {
+    for (const cb of this.changeListeners) cb()
+  }
+
   private async handleMessage(msg: ServerMessage): Promise<void> {
     if (msg.type === 'snapshot') {
       await this.loadSnapshot(msg as SnapshotMessage)
+      this.notifyChange()
     } else if (msg.type === 'delta') {
       await applyDelta(this.db, msg as DeltaMessage)
+      this.notifyChange()
     }
   }
 

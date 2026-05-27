@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "datum-sync": "*",
+    "datum-sync-react": "*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "maplibre-gl": "^4.4.0"
