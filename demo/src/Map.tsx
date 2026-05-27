@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection } from 'geojson'
-import { DatumClient } from '@a-saed/datum'
+import { DatumClient } from 'datum-sync'
 import type { AppStatus } from './App.js'
 
 interface Props {

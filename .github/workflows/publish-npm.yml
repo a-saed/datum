@@ -21,12 +21,12 @@ jobs:
         run: npm ci
 
       - name: Build client
-        run: npm run build -w @a-saed/datum
+        run: npm run build -w datum-sync
 
       - name: Run tests
-        run: npm test -w @a-saed/datum
+        run: npm test -w datum-sync
 
       - name: Publish to npm
-        run: npm publish -w @a-saed/datum --access public
+        run: npm publish -w datum-sync --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
