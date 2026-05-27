@@ -52,7 +52,7 @@ export function Map({ onStatusChange }: Props) {
 
       try {
         const client = await DatumClient.connect({
-          serverUrl: 'ws://localhost:3000/ws',
+          serverUrl: import.meta.env.VITE_DATUM_SERVER_URL ?? 'ws://localhost:3000/ws',
           bbox,
         })
         clientRef.current = client
