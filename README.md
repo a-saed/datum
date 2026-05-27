@@ -2,6 +2,8 @@
 
 Local-first spatial sync for PostGIS. A bounding box is a first-class live sync subscription.
 
+**[Live Demo](https://a-saed.github.io/datum/demo/) · [Docs](https://a-saed.github.io/datum/) · [npm](https://www.npmjs.com/package/datum-sync)**
+
 ```ts
 const db = await DatumClient.connect({
   serverUrl: 'ws://localhost:3000/ws',
@@ -28,7 +30,7 @@ docker compose up -d
 
 ```bash
 npm install
-npm run build -w datum
+npm run build -w datum-sync
 npm run dev -w datum-demo
 ```
 
@@ -40,7 +42,7 @@ Open a second browser tab — features added in one tab appear in the other with
 
 ## How it works
 
-- **Client (`datum` npm package):** PGlite + PostGIS WASM. Full spatial queries run locally.
+- **Client (`datum-sync` npm package):** PGlite + PostGIS WASM. Full spatial queries run locally.
 - **datum-server (Go):** Thin protocol bridge. Calls PostGIS SQL functions. Contains no spatial logic.
 - **SQL migration:** Installs `datum.sync()`, `datum.write()`, and a `NOTIFY` trigger into your PostGIS.
 
