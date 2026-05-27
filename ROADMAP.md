@@ -4,7 +4,7 @@
 
 These are blockers for anyone trying to use datum in a real app.
 
-### Delete propagation
+### ~~Delete propagation~~ ✓ Done
 `DELETE` statements are captured by the outbox trigger and sent to datum-server, but the server does not broadcast deletes to other clients as a delta. Features deleted by one client persist on all other clients until they reconnect.
 
 **Scope:** `packages/server/sync.go` (handle `op: delete` in the write handler and broadcast a delete delta), `packages/client/src/client.ts` (apply delete deltas to local PGlite).
