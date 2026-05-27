@@ -4,7 +4,6 @@ Local-first spatial sync for PostGIS. A bounding box is a first-class live sync 
 
 **[Live Demo](https://a-saed.github.io/datum/demo/) · [Docs](https://a-saed.github.io/datum/) · [npm](https://www.npmjs.com/package/datum-sync)**
 
-<video src="https://github.com/a-saed/datum/releases/download/v0.2.0/datum-demo.mp4" autoplay loop muted playsinline width="100%"></video>
 
 ```ts
 const db = await DatumClient.connect({
