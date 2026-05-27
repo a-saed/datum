@@ -16,6 +16,17 @@ const features = await db.query(`
 `)
 ```
 
+## Install
+
+```bash
+npm install datum-sync
+```
+
+```ts
+import { DatumClient } from 'datum-sync'
+import { useDatum } from 'datum-sync/react' // optional React hook
+```
+
 ## Quick start (5 minutes)
 
 **Prerequisites:** Docker, Node.js 20+
@@ -38,7 +49,7 @@ Open http://localhost:5173. Click the map to add features. Watch them sync.
 
 **3. Verify sync**
 
-Open a second browser tab — features added in one tab appear in the other within 5 seconds.
+Open a second browser tab — features added in one tab appear in the other within a few seconds.
 
 ## How it works
 
@@ -60,6 +71,8 @@ docker run ghcr.io/a-saed/datum-server \
 ```
 
 The default `*` allows all origins and is only suitable for local development.
+
+> **Security note:** datum-server currently has no user authentication — any client that can reach the WebSocket endpoint can read and write data. Use `-allowed-origin` to restrict browser access, and firewall the port for anything sensitive. Per-user auth is on the [roadmap](ROADMAP.md).
 
 ## Documentation
 
