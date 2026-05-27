@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build -w datum-sync",
     "test": "npm test --workspaces --if-present",
+    "release": "bash scripts/release.sh",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
