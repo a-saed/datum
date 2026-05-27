@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,8 +52,14 @@ func (s *server) run(ctx context.Context) error {
 	http.HandleFunc("/ws", s.handleWS)
 
 	go func() {
-		if err := listenForNotifications(ctx, s); err != nil {
-			log.Printf("datum-server: notify listener stopped: %v", err)
+		for {
+			if err := listenForNotifications(ctx, s); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				log.Printf("datum-server: notify listener stopped: %v — retrying in 5s", err)
+				time.Sleep(5 * time.Second)
+			}
 		}
 	}()
 
