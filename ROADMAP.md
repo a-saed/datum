@@ -2,8 +2,8 @@
 
 ## High priority
 
-### Configurable column mapping
-datum currently requires a specific table shape (`id`, `geom`, `properties`, `updated_at`). Most existing PostGIS users have typed columns (`name TEXT`, `height FLOAT`, etc.) rather than a JSON properties bag. Column mapping would let users point datum at any existing PostGIS table by specifying which columns map to each role.
+### Typed column support
+datum now supports custom column names via `-col-id`, `-col-geom`, `-col-updated-at`, `-col-properties`. However the `properties` column must still be a single `JSONB` bag. Users with typed columns (`name TEXT`, `height FLOAT`, etc.) need typed column support so datum can map individual columns into the properties object automatically.
 
 ### Multiple tables
 The server is configured with a single `-table` flag. Real apps need to sync multiple tables together with a single connection. Each table would have its own bbox subscription and outbox.
@@ -25,6 +25,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Configurable column mapping** — `-col-id`, `-col-geom`, `-col-updated-at`, `-col-properties` flags let you point datum at any existing PostGIS table without renaming columns.
 - **Dynamic bounding box** — `client.setBbox(bbox)` updates the subscription without reconnecting. Server sends a new snapshot for the updated area.
 - **React hooks** — `useDatum(client, sql)` from `datum-sync/react`. Reactive queries, no polling.
 - **Live demo** — [a-saed.github.io/datum/demo](https://a-saed.github.io/datum/demo/)

@@ -177,19 +177,35 @@ function FeatureList() {
 
 ### Flags
 
-| Flag | Required | Default | Description |
+| Flag | Env var | Default | Description |
 |---|---|---|---|
-| `-db` | Yes | — | PostgreSQL connection URL |
-| `-table` | Yes | — | Table name to sync. Server config only — never client-supplied. |
-| `-port` | No | `3000` | Port to listen on |
-| `-allowed-origin` | No | `*` | Allowed WebSocket `Origin` header. Set to your app's domain in production. `*` allows all origins (local dev only). |
+| `-db` | `DATABASE_URL` | — | PostgreSQL connection URL **(required)** |
+| `-table` | `TABLE` | — | Table name to sync **(required)** |
+| `-port` | `PORT` | `3000` | Port to listen on |
+| `-allowed-origin` | `ALLOWED_ORIGIN` | `*` | Allowed WebSocket `Origin` header. Set to your app's domain in production. `*` allows all origins (dev only). |
+| `-rate-limit` | `RATE_LIMIT` | `0` | Max write messages per minute per IP. `0` = disabled. |
+| `-col-id` | `COL_ID` | `id` | UUID primary key column name |
+| `-col-geom` | `COL_GEOM` | `geom` | PostGIS geometry column name |
+| `-col-updated-at` | `COL_UPDATED_AT` | `updated_at` | Last-modified timestamp column name |
+| `-col-properties` | `COL_PROPERTIES` | `properties` | JSONB properties column name |
 
-**Example (production):**
+**Example — existing table with custom column names:**
+```bash
+datum-server \
+  -db "postgres://user:pass@host/mydb" \
+  -table sites \
+  -col-id site_id \
+  -col-geom location \
+  -col-updated-at modified_at \
+  -col-properties attrs \
+  -allowed-origin "https://myapp.com"
+```
+
+**Example — greenfield (default column names):**
 ```bash
 datum-server \
   -db "postgres://user:pass@host/mydb" \
   -table features \
-  -port 3000 \
   -allowed-origin "https://myapp.com"
 ```
 
@@ -285,51 +301,23 @@ Installed automatically by datum-server on startup. Idempotent — safe to run m
 
 ### Required table schema
 
-datum-server creates the table if it does not exist. If you are bringing an **existing** PostGIS table, it must have these four columns:
+datum-server creates the table if it does not exist. If you are bringing an **existing** PostGIS table, it must have four columns that map to these roles — use the `-col-*` flags to point datum at your actual column names:
 
-```sql
-id          UUID        PRIMARY KEY DEFAULT gen_random_uuid()
-geom        GEOMETRY(Geometry, 4326) NOT NULL
-properties  JSONB       NOT NULL DEFAULT '{}'
-updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-```
+| Role | Default column | Flag |
+|---|---|---|
+| UUID primary key | `id` | `-col-id` |
+| PostGIS geometry (WGS-84) | `geom` | `-col-geom` |
+| JSONB properties bag | `properties` | `-col-properties` |
+| Last-modified timestamp | `updated_at` | `-col-updated-at` |
 
-- **`id`** — stable UUID primary key, used for conflict resolution.
-- **`geom`** — any PostGIS geometry type, in WGS-84 (EPSG:4326). Points, lines, and polygons all work.
-- **`properties`** — free-form JSON for any additional attributes (name, type, tags, etc.).
-- **`updated_at`** — last-write-wins conflict resolution is based on this column. Always set it to `now()` on insert/update.
+- **geometry** — any PostGIS geometry type in EPSG:4326. Points, lines, and polygons all work.
+- **properties** — free-form JSONB for any additional attributes. Must be a single `JSONB` column today — typed columns (`name TEXT`, `height FLOAT`) are on the roadmap.
+- **updated_at** — last-write-wins conflict resolution is based on this column. Always set it to `now()` on insert/update.
 
-datum-server will also install a spatial index on `geom` and attach the `datum_capture_changes` outbox trigger to the table.
-
-::: warning Existing tables
-If your table has typed columns (`name TEXT`, `height FLOAT`, etc.) rather than a `properties JSONB` bag, you cannot use datum directly against it today. Configurable column mapping — letting you point datum at any existing PostGIS table — is on the [roadmap](https://github.com/a-saed/datum/blob/main/ROADMAP.md).
-:::
-
-### `datum.sync(p_bbox, p_since)`
-
-Returns all features from the configured table that intersect `p_bbox` and were updated after `p_since`. Used for the initial snapshot and incremental catch-up.
-
-```sql
-SELECT * FROM datum.sync(
-  ST_MakeEnvelope(-122.5, 37.7, -122.4, 37.8, 4326),
-  '1970-01-01'::timestamptz
-)
-```
-
-### `datum.write(p_edits)`
-
-Applies a batch of client edits using last-write-wins. Newer `updated_at` wins on conflict.
-
-```sql
-SELECT datum.write('[
-  {
-    "op": "insert",
-    "feature_id": "...",
-    "data": { "geom": "...", "properties": {}, "updated_at": "..." }
-  }
-]'::jsonb)
-```
+datum-server installs a spatial index on the geometry column and attaches the `datum_notify_change` trigger to the table.
 
 ### `datum.notify_change()` trigger
 
 Fires on INSERT/UPDATE/DELETE and calls `pg_notify('datum_changes', payload)`. Payload includes `origin_client_id` from the session variable `datum.client_id` (set by datum-server during write transactions) so the server can skip echoing changes back to the originating client.
+
+This is the only database-side object datum installs beyond the table and index. Snapshot queries and write logic run in the Go server directly.
