@@ -200,28 +200,36 @@ datum-server -config datum.yaml -db $DATABASE_URL
 
 The `-db` flag (or `DATABASE_URL` env var) is always required and is intentionally kept out of the config file to avoid committing credentials.
 
-### Flags and env vars
+### Flags
 
-All settings can also be passed as flags or env vars — useful for deployment overrides. **Precedence: flag > env var > config file > default.**
+Only two flags exist — everything else goes in the config file:
 
-| Flag | Env var | Default | Description |
+| Flag | Env var | Required | Description |
 |---|---|---|---|
-| `-config` | `CONFIG` | — | Path to `datum.yaml` |
-| `-db` | `DATABASE_URL` | — | PostgreSQL connection URL **(required)** |
-| `-table` | `TABLE` | — | Table name (overrides config file) |
-| `-port` | `PORT` | `3000` | Port to listen on |
-| `-allowed-origin` | `ALLOWED_ORIGIN` | `*` | Allowed WebSocket `Origin` header. `*` allows all origins (dev only). |
-| `-rate-limit` | `RATE_LIMIT` | `0` | Max writes/min per IP. `0` = disabled. |
-| `-col-id` | `COL_ID` | `id` | UUID primary key column |
-| `-col-geom` | `COL_GEOM` | `geom` | PostGIS geometry column |
-| `-col-updated-at` | `COL_UPDATED_AT` | `updated_at` | Last-modified timestamp column |
-| `-col-properties` | `COL_PROPERTIES` | `properties` | JSONB properties column |
+| `-db` | `DATABASE_URL` | Yes | PostgreSQL connection URL. Keep this out of the config file. |
+| `-config` | `CONFIG` | No | Path to `datum.yaml` |
 
-**Example (Docker):**
+### Env var overrides
+
+All config file fields can be overridden via env vars — useful for Docker and deployment environments where you don't want to mount a config file. **Precedence: env var > config file > default.**
+
+| Env var | Config file key | Default |
+|---|---|---|
+| `TABLE` | `table.name` | — |
+| `PORT` | `port` | `3000` |
+| `ALLOWED_ORIGIN` | `allowed_origin` | `*` |
+| `RATE_LIMIT` | `rate_limit` | `0` |
+| `COL_ID` | `table.col_id` | `id` |
+| `COL_GEOM` | `table.col_geom` | `geom` |
+| `COL_UPDATED_AT` | `table.col_updated_at` | `updated_at` |
+| `COL_PROPERTIES` | `table.col_properties` | `properties` |
+
+**Example (Docker with env vars):**
 ```bash
 docker run ghcr.io/a-saed/datum-server \
-  -config /etc/datum/datum.yaml \
-  -db $DATABASE_URL
+  -db $DATABASE_URL \
+  -e TABLE=sites \
+  -e ALLOWED_ORIGIN=https://myapp.com
 ```
 
 ---
