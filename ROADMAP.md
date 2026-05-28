@@ -8,9 +8,6 @@ datum supports custom column names via `col_id`, `col_geom`, `col_updated_at`, `
 ### Per-user authentication
 Any client that can reach the WebSocket endpoint can read and write all data. Proper per-user auth (JWT / row-level security) is needed before datum is safe for multi-tenant apps. The `allowed_origin` config option limits browser origins but is not a substitute for user-level access control.
 
-### Connection status and auto-reconnect
-There is currently no way to know if the client is connecting, connected, or disconnected. If the WebSocket drops mid-session the client silently stops syncing — the user must refresh. Needed: a `status` field (`connecting | connected | disconnected`), an `onStatusChange` callback, and automatic reconnect with delta catch-up on recovery.
-
 ---
 
 ## Medium priority
@@ -32,6 +29,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Connection status + auto-reconnect** — `connectionStatus` getter and `onStatusChange` callback expose `'connecting' | 'connected' | 'disconnected'`. Client auto-reconnects with exponential backoff (1 s → 30 s cap) when the WebSocket drops. `connectTimeout` (default 30 s) rejects `connect()` if the initial snapshot never arrives.
 - **Local table name matches server** — the local PGlite table is now named after `config.table`, so queries mirror the server schema exactly. `dbName` also defaults to `config.table` to prevent IndexedDB collisions in multi-table setups.
 - **Multiple tables** — configure multiple tables in `datum.yaml` under `tables:`, each with its own column mapping. Each `DatumClient` instance subscribes to one table by passing `table` in the config.
 - **Configurable column mapping** — set `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml` (or via env vars) to point datum at any existing PostGIS table without renaming columns.

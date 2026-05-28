@@ -1,3 +1,3 @@
 // packages/client/src/index.ts
 export { DatumClient } from './client.js'
-export type { DatumConfig, Feature, ChangeEvent, BBox } from './types.js'
+export type { DatumConfig, ConnectionStatus, Feature, ChangeEvent, BBox } from './types.js'

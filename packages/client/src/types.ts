@@ -20,6 +20,9 @@ export interface ChangeEvent {
   updated_at: string
 }
 
+/** WebSocket connection state of a {@link DatumClient}. */
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
+
 /**
  * Configuration passed to {@link DatumClient.connect}.
  */
@@ -45,9 +48,22 @@ export interface DatumConfig {
   /**
    * IndexedDB database name. Use distinct names when running multiple
    * datum instances on the same origin.
-   * @default "datum"
+   * @default config.table ?? "datum"
    */
   dbName?: string
+  /**
+   * How long (in milliseconds) to wait for the initial snapshot before
+   * rejecting the `connect()` promise. Set to `0` to disable.
+   * @default 30000
+   */
+  connectTimeout?: number
+  /**
+   * Called whenever the connection status changes.
+   * Fires with `'connecting'` on each connection attempt,
+   * `'connected'` once the initial data is ready,
+   * and `'disconnected'` when the WebSocket drops unexpectedly.
+   */
+  onStatusChange?: (status: ConnectionStatus) => void
 }
 
 /** A spatial feature as returned by the server snapshot or delta. */

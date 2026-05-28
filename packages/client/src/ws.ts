@@ -5,9 +5,11 @@ export function connectWS(
   serverUrl: string,
   onMessage: (msg: ServerMessage) => void,
   onOpen: () => void,
+  onClose: () => void,
 ): WebSocket {
   const ws = new WebSocket(serverUrl)
   ws.addEventListener('open', onOpen)
+  ws.addEventListener('close', onClose)
   ws.addEventListener('message', (event) => {
     try {
       const msg = JSON.parse(event.data as string) as ServerMessage

@@ -5,6 +5,7 @@ import { bootLocalDb } from './pglite.js'
 import { drainOutbox, applyDelta, markSynced } from './sync.js'
 import { connectWS, sendMessage } from './ws.js'
 import type {
+  ConnectionStatus,
   DatumConfig,
   ServerMessage,
   SnapshotMessage,
@@ -18,11 +19,16 @@ import type {
  * no network round-trip required. Writes are captured automatically and
  * pushed to datum-server on a background sync cycle.
  *
+ * The client automatically reconnects with exponential backoff if the
+ * WebSocket drops. Use `onStatusChange` in the config to react to
+ * `'connecting'` / `'connected'` / `'disconnected'` transitions.
+ *
  * @example
  * ```ts
  * const db = await DatumClient.connect({
  *   serverUrl: 'ws://localhost:3000/ws',
  *   bbox: [-122.5, 37.7, -122.4, 37.8],
+ *   onStatusChange: (s) => console.log('datum:', s),
  * })
  *
  * const result = await db.query<{ name: string }>(
@@ -39,70 +45,61 @@ export class DatumClient {
   private config: DatumConfig
   private readonly tableName: string
   private syncTimer: ReturnType<typeof setInterval> | null = null
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private changeListeners = new Set<() => void>()
+  private _status: ConnectionStatus = 'connecting'
+  private needsSnapshot: boolean
+  private reconnectAttempt = 0
+  private isDisconnecting = false
+  private resolveReady: (() => void) | null = null
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
 
-  private constructor(db: PGlite, clientId: string, config: DatumConfig) {
+  private constructor(db: PGlite, clientId: string, config: DatumConfig, isFirstVisit: boolean) {
     this.db = db
     this.clientId = clientId
     this.config = config
     this.tableName = config.table ?? 'features'
+    this.needsSnapshot = isFirstVisit
   }
 
   /**
    * Connect to datum-server and load features into local PGlite.
    *
    * - First visit: awaits the full snapshot before resolving (~3s).
-   * - Returning visit: resolves immediately with local data (~200ms),
-   *   then catches up with server changes in the background.
+   * - Returning visit: resolves once the WebSocket opens and the
+   *   catch-up subscribe is sent (~200ms), then syncs in the background.
+   *
+   * Rejects if `connectTimeout` (default 30 s) elapses before the
+   * initial snapshot arrives. Set `connectTimeout: 0` to disable.
    */
   static async connect(config: DatumConfig): Promise<DatumClient> {
     const { db, isFirstVisit } = await bootLocalDb(config.dbName ?? config.table, config.table ?? 'features')
     const clientId = uuidv4()
-    const client = new DatumClient(db, clientId, config)
+    const client = new DatumClient(db, clientId, config, isFirstVisit)
 
-    if (isFirstVisit) {
-      let resolveReady!: () => void
-      const ready = new Promise<void>(resolve => { resolveReady = resolve })
+    const timeout = config.connectTimeout ?? 30_000
+    const ready = new Promise<void>((resolve, reject) => {
+      const timer = timeout > 0
+        ? setTimeout(() => {
+            void client.disconnect()
+            reject(new Error(`datum: connect() timed out after ${timeout}ms`))
+          }, timeout)
+        : null
+      client.resolveReady = () => {
+        if (timer !== null) clearTimeout(timer)
+        resolve()
+      }
+    })
 
-      let snapshotReceived = false
-      const ws = connectWS(
-        config.serverUrl,
-        (msg) => {
-          const p = client.handleMessage(msg)
-          if (!snapshotReceived && msg.type === 'snapshot') {
-            snapshotReceived = true
-            void p.then(resolveReady)
-          } else {
-            void p
-          }
-        },
-        () => {
-          sendMessage(ws, {
-            type: 'subscribe',
-            bbox: config.bbox,
-            client_id: clientId,
-            ...(config.table ? { table: config.table } : {}),
-          })
-        },
-      )
+    client.openConnection()
+    await ready
+    client.startSyncCycle()
+    return client
+  }
 
-      client.ws = ws
-      await ready
-      client.startSyncCycle()
-      return client
-    } else {
-      // Returning visit — resolve immediately, catch up in background
-      const ws = connectWS(
-        config.serverUrl,
-        (msg) => { void client.handleMessage(msg) },
-        () => { void client.sendSubscribeWithSince() },
-      )
-
-      client.ws = ws
-      client.startSyncCycle()
-      return client
-    }
+  /** Current WebSocket connection status. */
+  get connectionStatus(): ConnectionStatus {
+    return this._status
   }
 
   /**
@@ -154,11 +151,62 @@ export class DatumClient {
   }
 
   /**
-   * Stop the sync cycle and close the WebSocket connection.
+   * Stop the sync cycle, cancel any pending reconnect, and close the
+   * WebSocket connection.
    */
   async disconnect(): Promise<void> {
+    this.isDisconnecting = true
     if (this.syncTimer) clearInterval(this.syncTimer)
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     this.ws.close()
+  }
+
+  private setStatus(s: ConnectionStatus): void {
+    if (this._status === s) return
+    this._status = s
+    this.config.onStatusChange?.(s)
+  }
+
+  private openConnection(): void {
+    this.setStatus('connecting')
+    this.ws = connectWS(
+      this.config.serverUrl,
+      (msg) => { void this.handleMessage(msg) },
+      () => { void this.onWsOpen() },
+      () => { this.onWsClose() },
+    )
+  }
+
+  private async onWsOpen(): Promise<void> {
+    this.reconnectAttempt = 0
+    if (this.needsSnapshot) {
+      // First visit (or reconnect before snapshot arrived): request full snapshot.
+      sendMessage(this.ws, {
+        type: 'subscribe',
+        bbox: this.config.bbox,
+        client_id: this.clientId,
+        ...(this.config.table ? { table: this.config.table } : {}),
+      })
+      // resolveReady is called after the snapshot is loaded (in handleMessage).
+    } else {
+      // Returning visit or reconnect: catch up on changes since last sync.
+      await this.sendSubscribeWithSince()
+      this.setStatus('connected')
+      this.resolveReady?.()
+      this.resolveReady = null
+    }
+  }
+
+  private onWsClose(): void {
+    if (this.isDisconnecting) return
+    this.setStatus('disconnected')
+    this.scheduleReconnect()
+  }
+
+  private scheduleReconnect(): void {
+    const delay = Math.min(1_000 * 2 ** this.reconnectAttempt, 30_000)
+    this.reconnectAttempt++
+    this.reconnectTimer = setTimeout(() => { this.openConnection() }, delay)
   }
 
   private notifyChange(): void {
@@ -168,6 +216,10 @@ export class DatumClient {
   private async handleMessage(msg: ServerMessage): Promise<void> {
     if (msg.type === 'snapshot') {
       await this.loadSnapshot(msg as SnapshotMessage)
+      this.needsSnapshot = false
+      this.setStatus('connected')
+      this.resolveReady?.()
+      this.resolveReady = null
       this.notifyChange()
     } else if (msg.type === 'delta') {
       await applyDelta(this.db, msg as DeltaMessage, this.tableName)
@@ -198,8 +250,6 @@ export class DatumClient {
     }
   }
 
-  // On returning visits, send subscribe with the latest local timestamp so the
-  // server only returns features changed since the last sync.
   private async sendSubscribeWithSince(): Promise<void> {
     const { rows } = await this.db.query<{ since: string }>(
       `SELECT COALESCE(

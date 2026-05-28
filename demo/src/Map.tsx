@@ -100,10 +100,16 @@ export function Map({ onStatusChange }: Props) {
 
       const serverUrl = import.meta.env.VITE_DATUM_SERVER_URL ?? 'ws://localhost:3000/ws'
 
+      const onConnStatus = (s: import('datum-sync').ConnectionStatus) => {
+        if (s === 'disconnected') onStatusChangeRef.current({ phase: 'error', text: 'Disconnected — reconnecting…' })
+        if (s === 'connecting')   onStatusChangeRef.current({ phase: 'connecting', text: 'Reconnecting…' })
+        if (s === 'connected')    onStatusChangeRef.current({ phase: 'ready', text: 'Click the map to add a point' })
+      }
+
       try {
         const [fc, wc] = await Promise.all([
-          DatumClient.connect({ serverUrl, bbox, table: 'features' }),
-          DatumClient.connect({ serverUrl, bbox, table: 'waypoints' }),
+          DatumClient.connect({ serverUrl, bbox, table: 'features',  onStatusChange: onConnStatus }),
+          DatumClient.connect({ serverUrl, bbox, table: 'waypoints', onStatusChange: onConnStatus }),
         ])
         featuresClientRef.current = fc
         waypointsClientRef.current = wc
