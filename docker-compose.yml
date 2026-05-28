@@ -23,7 +23,9 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: "postgres://datum:datum@postgis:5432/datum"
-      TABLE: "features"
+    volumes:
+      - ./datum.dev.yaml:/app/datum.dev.yaml
+    command: ["-config", "/app/datum.dev.yaml"]
     depends_on:
       postgis:
         condition: service_healthy

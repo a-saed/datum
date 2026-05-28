@@ -55,7 +55,7 @@ export class DatumClient {
    *   then catches up with server changes in the background.
    */
   static async connect(config: DatumConfig): Promise<DatumClient> {
-    const { db, isFirstVisit } = await bootLocalDb(config.dbName)
+    const { db, isFirstVisit } = await bootLocalDb(config.dbName ?? config.table)
     const clientId = uuidv4()
     const client = new DatumClient(db, clientId, config)
 
