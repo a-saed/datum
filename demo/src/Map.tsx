@@ -149,7 +149,7 @@ export function Map({ onStatusChange }: Props) {
         noteInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:14px;outline:none'
         container.append(nameInput, noteInput)
         noteInput.addEventListener('keydown', (ev: KeyboardEvent) => { if (ev.key === 'Enter') saveBtn.click() })
-        getExtraProps = () => {
+        getExtraProps = (): Record<string, string> => {
           const note = noteInput.value.trim()
           return note ? { note } : {}
         }
