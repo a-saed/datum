@@ -1,6 +1,6 @@
 {
   "name": "datum-sync",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local-first spatial sync for PostGIS. A bounding box is a first-class live sync subscription.",
   "keywords": [
     "postgis",
