@@ -348,15 +348,15 @@ datum-server speaks JSON over WebSocket at `/ws`.
       "data": {
         "geom": "{\"type\":\"Point\",\"coordinates\":[-122.4,37.8]}",
         "properties": { "name": "Site A" },
-        "updated_at": "2026-05-26T10:00:00Z"
+        "updated_at": "2026-05-26T10:00:00.000Z"
       },
-      "updated_at": "2026-05-26T10:00:00Z"
+      "updated_at": "2026-05-26T10:00:00.000Z"
     }
   ]
 }
 ```
 
-`op` is one of `"insert"`, `"update"`, `"delete"`. `table` follows the same rule as subscribe — omit for single-table setups.
+`op` is one of `"insert"`, `"update"`, `"delete"`. `table` follows the same rule as subscribe — omit for single-table setups. Batches are limited to 500 edits.
 
 ### Server → Client
 
@@ -375,6 +375,16 @@ datum-server speaks JSON over WebSocket at `/ws`.
 }
 ```
 
+**Ack** — sent by the server after a `write` batch is applied successfully:
+```json
+{
+  "type": "ack",
+  "write_ids": ["uuid", "uuid"]
+}
+```
+
+The client marks outbox entries as synced only after receiving the ack. If the connection drops before the ack arrives the writes are retried on reconnect.
+
 **Delta** — real-time push when another client edits a feature in your bbox:
 ```json
 {
@@ -384,13 +394,13 @@ datum-server speaks JSON over WebSocket at `/ws`.
     "id": "uuid",
     "geom": "{\"type\":\"Point\",\"coordinates\":[-122.4,37.8]}",
     "properties": { "name": "Site A (updated)" },
-    "updated_at": "2026-05-26T10:05:00Z"
+    "updated_at": "2026-05-26T10:05:00.000Z"
   },
   "origin_client_id": "uuid"
 }
 ```
 
-Deltas are only sent to clients whose bounding box intersects the changed feature. The originating client never receives its own delta.
+Deltas are only sent to clients whose bounding box intersects the changed feature's bounding box. For polygons and lines the full geometry bbox is used, not just the first vertex. The originating client never receives its own delta.
 
 ---
 

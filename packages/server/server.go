@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -174,6 +175,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 	})
 
 	client := &wsClient{
+		id:   newUUID(),
 		send: make(chan []byte, 64),
 		conn: conn,
 	}
@@ -309,6 +311,15 @@ func extractClientIP(r *http.Request) string {
 		return ip
 	}
 	return r.RemoteAddr
+}
+
+// newUUID returns a random UUID v4.
+func newUUID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
 func (c *wsClient) writePump() {

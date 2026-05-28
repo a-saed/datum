@@ -216,6 +216,8 @@ export class DatumClient {
       this.setStatus('connected')
       this.resolveReady?.()
       this.resolveReady = null
+      // Flush any pending writes immediately rather than waiting for the next tick.
+      void this.pushOutbox()
     }
   }
 
@@ -255,6 +257,8 @@ export class DatumClient {
       this.resolveReady?.()
       this.resolveReady = null
       this.notifyChange()
+      // Flush any pending writes immediately rather than waiting for the next tick.
+      void this.pushOutbox()
     } else if (msg.type === 'delta') {
       await applyDelta(this.db, msg as DeltaMessage, this.tableName)
       this.notifyChange()

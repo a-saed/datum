@@ -13,7 +13,7 @@ export async function drainOutbox(db: PGlite): Promise<ChangeEvent[]> {
     SELECT write_id::text, op, feature_id::text, data, updated_at::text
     FROM _datum_outbox
     WHERE synced = false
-    ORDER BY updated_at ASC
+    ORDER BY seq ASC
   `)
 
   if (res.rows.length === 0) return []

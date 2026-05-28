@@ -2,7 +2,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { postgis } from '@electric-sql/pglite-postgis'
 
-export const SCHEMA_VERSION = '1'
+export const SCHEMA_VERSION = '2'
 
 /**
  * Boot the local PGlite database backed by IndexedDB.
@@ -58,7 +58,8 @@ export async function setupSchema(db: PGlite, tableName = 'features'): Promise<b
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_outbox (
-      write_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      seq         BIGSERIAL PRIMARY KEY,
+      write_id    UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
       op          TEXT NOT NULL,
       feature_id  UUID NOT NULL,
       data        JSONB,

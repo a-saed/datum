@@ -27,13 +27,15 @@ From that point on, the server only pushes delta messages to clients whose bound
 The full write path:
 
 1. Client writes to local PGlite via `db.query('INSERT ...')`
-2. The `_datum_capture_change` trigger captures the write into `_datum_outbox`
-3. Every `syncInterval` ms (default 5000), the client drains the outbox and sends a `write` message to datum-server over WebSocket
+2. The `_datum_capture_change` trigger captures the write into `_datum_outbox` with an auto-incrementing `seq` column
+3. Every `syncInterval` ms (default 5000), the client drains unsynced outbox entries (ordered by `seq`) and sends a `write` message to datum-server over WebSocket. Writes already in-flight are skipped.
 4. datum-server applies each edit directly to PostGIS — last-write-wins on conflict
-5. The `datum_notify_change` trigger fires on the PostGIS table
-6. datum-server listens for `NOTIFY` and broadcasts a `delta` message to all other clients whose bbox intersects the changed feature
+5. datum-server sends an `ack` back to the originating client with the `write_ids` that were applied
+6. The client marks those writes as synced only after receiving the ack; if the connection drops mid-flight the writes are retried on reconnect
+7. The `datum_notify_change` trigger fires on the PostGIS table
+8. datum-server listens for `NOTIFY` and broadcasts a `delta` message to all other clients whose bbox intersects the changed feature's bounding box
 
-The originating client never receives its own delta back.
+The originating client never receives its own delta back. Delta routing uses the full geometry bounding box, so polygons and lines are correctly broadcast to all overlapping clients — not just those containing the first vertex.
 
 ## IndexedDB persistence and fast reconnect
 
