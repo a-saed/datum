@@ -8,7 +8,12 @@ title: API Reference
 
 ### `DatumClient.connect(config)`
 
-Connects to datum-server and loads the initial snapshot into local PGlite. Resolves once the snapshot is fully written — the client is immediately queryable offline after this point.
+Connects to datum-server and loads the initial snapshot into local PGlite.
+
+- **First visit** — awaits the full snapshot before resolving (~3 s). Rejects after `connectTimeout` (default 30 s) if the server is unreachable.
+- **Returning visit** — resolves once the WebSocket opens and a catch-up subscribe is sent (~200 ms). Local data is immediately available; the delta sync runs in the background.
+
+The client automatically reconnects with exponential backoff if the connection drops after `connect()` resolves.
 
 ```ts
 const db = await DatumClient.connect({
@@ -19,13 +24,15 @@ const db = await DatumClient.connect({
 
 **Config options:**
 
-| Option | Type | Required | Description |
+| Option | Type | Default | Description |
 |---|---|---|---|
-| `serverUrl` | `string` | Yes | WebSocket URL of datum-server |
-| `bbox` | `[minX, minY, maxX, maxY]` | Yes | Bounding box in WGS-84. Only features intersecting this box are synced. |
-| `table` | `string` | No | Server-side table name. Required when datum-server is configured with multiple tables; omit for single-table setups. |
-| `syncInterval` | `number` (ms) | No | How often local writes are pushed to the server. Default: `5000` |
-| `dbName` | `string` | No | IndexedDB database name. Use distinct names when running multiple datum instances on the same origin. Default: `"datum"` |
+| `serverUrl` | `string` | — | WebSocket URL of datum-server |
+| `bbox` | `[minX, minY, maxX, maxY]` | — | Bounding box in WGS-84. Only features intersecting this box are synced. |
+| `table` | `string` | — | Server-side table name. Required when datum-server is configured with multiple tables; omit for single-table setups. |
+| `syncInterval` | `number` (ms) | `5000` | How often local writes are pushed to the server. |
+| `dbName` | `string` | `table` or `"datum"` | IndexedDB database name. Defaults to `table` when set, so each table gets its own database automatically. Override when you need explicit control. |
+| `connectTimeout` | `number` (ms) | `30000` | How long to wait for the initial snapshot before rejecting `connect()`. Set to `0` to disable. |
+| `onStatusChange` | `(status: ConnectionStatus) => void` | — | Called whenever the connection transitions between `'connecting'`, `'connected'`, and `'disconnected'`. |
 
 ---
 
@@ -76,9 +83,46 @@ map.on('moveend', () => {
 
 ---
 
+### `db.connectionStatus`
+
+Read-only getter. Returns the current connection state: `'connecting'`, `'connected'`, or `'disconnected'`.
+
+```ts
+console.log(db.connectionStatus) // 'connected'
+```
+
+The client automatically reconnects with exponential backoff (1 s → 30 s cap) when the WebSocket drops unexpectedly. `'disconnected'` means a drop occurred and a reconnect is pending; the client is still operational with local data.
+
+---
+
+### `db.pendingCount`
+
+Read-only getter. Number of local writes waiting to be pushed to the server.
+
+```ts
+console.log(db.pendingCount) // 3
+```
+
+---
+
+### `db.onPendingChange(callback)`
+
+Subscribes to pending write count changes. Fires after every local write and after every successful sync flush. Returns an unsubscribe function.
+
+```ts
+const unsub = db.onPendingChange(count => {
+  setStatus(count === 0 ? 'Synced' : `${count} pending`)
+})
+
+// Later:
+unsub()
+```
+
+---
+
 ### `db.disconnect()`
 
-Stops the sync cycle and closes the WebSocket. The local PGlite database is in-memory and discarded.
+Stops the sync cycle, cancels any pending reconnect, and closes the WebSocket.
 
 ```ts
 await db.disconnect()
@@ -261,10 +305,11 @@ All config file fields can be overridden via env vars — useful for Docker and 
 
 **Example (Docker with env vars):**
 ```bash
-docker run ghcr.io/a-saed/datum-server \
-  -db $DATABASE_URL \
+docker run \
+  -e DATABASE_URL=$DATABASE_URL \
   -e TABLE=sites \
-  -e ALLOWED_ORIGIN=https://myapp.com
+  -e ALLOWED_ORIGIN=https://myapp.com \
+  ghcr.io/a-saed/datum-server
 ```
 
 ---

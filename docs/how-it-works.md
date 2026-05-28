@@ -1,6 +1,6 @@
 # How It Works
 
-datum has four moving parts: a local PGlite database in the browser, a bounding box subscription model, a write outbox sync cycle, and IndexedDB persistence for fast reconnect.
+datum has five moving parts: a local PGlite database in the browser, a bounding box subscription model, a write outbox sync cycle, IndexedDB persistence for fast reconnect, and automatic reconnection with live status reporting.
 
 ## Local-first model
 
@@ -42,3 +42,13 @@ On the **first visit**, PGlite boots in-memory, downloads a full snapshot from t
 On **returning visits**, PGlite loads directly from IndexedDB (~200ms). Local data is immediately queryable. In the background, datum connects to the server and requests only features updated since `MAX(updated_at)` in the local database — a delta catch-up that runs without blocking the UI.
 
 A `_datum_meta` table tracks the schema version. If the client library updates the local schema, it automatically wipes IndexedDB and performs a full re-sync on the next visit.
+
+## Connection status and auto-reconnect
+
+The client exposes a `connectionStatus` getter (`'connecting' | 'connected' | 'disconnected'`) and an `onStatusChange` callback so your application can react to network changes.
+
+If the WebSocket drops mid-session, the client automatically reconnects with exponential backoff — 1 s, 2 s, 4 s, … up to 30 s. On reconnect, it sends a subscribe message with `since = MAX(updated_at)` so only missed deltas are returned; no full re-sync is needed.
+
+During a disconnected period, local reads and writes continue working normally against PGlite. Pending writes are queued in `_datum_outbox` and pushed as soon as the connection recovers. You can check how many writes are waiting at any time via `client.pendingCount` or subscribe to changes with `client.onPendingChange(cb)`.
+
+On first connect, `connect()` rejects with an error after `connectTimeout` (default 30 s) if the server never responds — rather than hanging forever.
