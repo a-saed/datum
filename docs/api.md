@@ -54,6 +54,27 @@ await db.query(
 
 ---
 
+### `db.setBbox(bbox)`
+
+Updates the bounding box subscription without reconnecting. The server sends a fresh snapshot for the new area; features already in the local DB are merged in via `ON CONFLICT DO UPDATE`.
+
+Use this when the user pans or zooms the map.
+
+```ts
+db.setBbox([-122.6, 37.6, -122.3, 37.9])
+```
+
+In a map app, wire it to the `moveend` event:
+
+```ts
+map.on('moveend', () => {
+  const b = map.getBounds()
+  db.setBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])
+})
+```
+
+---
+
 ### `db.disconnect()`
 
 Stops the sync cycle and closes the WebSocket. The local PGlite database is in-memory and discarded.
@@ -188,7 +209,7 @@ datum-server speaks JSON over WebSocket at `/ws`.
 
 ### Client → Server
 
-**Subscribe** — sent once on connect to declare the client's bounding box:
+**Subscribe** — sent on connect and whenever the bbox changes (e.g. map pan/zoom). The server updates the client's bbox and sends a new snapshot for the updated area:
 ```json
 {
   "type": "subscribe",
