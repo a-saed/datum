@@ -37,6 +37,7 @@ export class DatumClient {
   private ws!: WebSocket
   private clientId: string
   private config: DatumConfig
+  private readonly tableName: string
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private changeListeners = new Set<() => void>()
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
@@ -45,6 +46,7 @@ export class DatumClient {
     this.db = db
     this.clientId = clientId
     this.config = config
+    this.tableName = config.table ?? 'features'
   }
 
   /**
@@ -55,7 +57,7 @@ export class DatumClient {
    *   then catches up with server changes in the background.
    */
   static async connect(config: DatumConfig): Promise<DatumClient> {
-    const { db, isFirstVisit } = await bootLocalDb(config.dbName ?? config.table)
+    const { db, isFirstVisit } = await bootLocalDb(config.dbName ?? config.table, config.table ?? 'features')
     const clientId = uuidv4()
     const client = new DatumClient(db, clientId, config)
 
@@ -168,17 +170,17 @@ export class DatumClient {
       await this.loadSnapshot(msg as SnapshotMessage)
       this.notifyChange()
     } else if (msg.type === 'delta') {
-      await applyDelta(this.db, msg as DeltaMessage)
+      await applyDelta(this.db, msg as DeltaMessage, this.tableName)
       this.notifyChange()
     }
   }
 
   private async loadSnapshot(msg: SnapshotMessage): Promise<void> {
-    await this.db.exec(`ALTER TABLE features DISABLE TRIGGER datum_capture_changes`)
+    await this.db.exec(`ALTER TABLE ${this.tableName} DISABLE TRIGGER datum_capture_changes`)
     try {
       for (const f of msg.features) {
         await this.db.query(`
-          INSERT INTO features (id, geom, properties, updated_at)
+          INSERT INTO ${this.tableName} (id, geom, properties, updated_at)
           VALUES (
             $1::uuid,
             ST_SetSRID(ST_GeomFromGeoJSON($2), 4326),
@@ -192,7 +194,7 @@ export class DatumClient {
         `, [f.id, f.geom, JSON.stringify(f.properties), f.updated_at])
       }
     } finally {
-      await this.db.exec(`ALTER TABLE features ENABLE TRIGGER datum_capture_changes`)
+      await this.db.exec(`ALTER TABLE ${this.tableName} ENABLE TRIGGER datum_capture_changes`)
     }
   }
 
@@ -203,7 +205,7 @@ export class DatumClient {
       `SELECT COALESCE(
          to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
          '1970-01-01T00:00:00Z'
-       ) AS since FROM features`
+       ) AS since FROM ${this.tableName}`
     )
     sendMessage(this.ws, {
       type: 'subscribe',

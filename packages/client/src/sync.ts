@@ -38,16 +38,16 @@ export async function markSynced(db: PGlite, writeIds: string[]): Promise<void> 
 // applyDelta applies a remote change to local PGlite.
 // It disables the outbox trigger temporarily so the remote change
 // does not get re-queued as a local write.
-export async function applyDelta(db: PGlite, delta: DeltaMessage): Promise<void> {
+export async function applyDelta(db: PGlite, delta: DeltaMessage, tableName = 'features'): Promise<void> {
   const f = delta.feature
 
-  await db.exec(`ALTER TABLE features DISABLE TRIGGER datum_capture_changes`)
+  await db.exec(`ALTER TABLE ${tableName} DISABLE TRIGGER datum_capture_changes`)
   try {
     if (delta.op === 'delete') {
-      await db.query(`DELETE FROM features WHERE id = $1`, [f.id])
+      await db.query(`DELETE FROM ${tableName} WHERE id = $1`, [f.id])
     } else {
       await db.query(`
-        INSERT INTO features (id, geom, properties, updated_at)
+        INSERT INTO ${tableName} (id, geom, properties, updated_at)
         VALUES (
           $1::uuid,
           ST_SetSRID(ST_GeomFromGeoJSON($2), 4326),
@@ -58,10 +58,10 @@ export async function applyDelta(db: PGlite, delta: DeltaMessage): Promise<void>
         SET geom       = EXCLUDED.geom,
             properties = EXCLUDED.properties,
             updated_at = EXCLUDED.updated_at
-        WHERE EXCLUDED.updated_at > features.updated_at
+        WHERE EXCLUDED.updated_at > ${tableName}.updated_at
       `, [f.id, f.geom, JSON.stringify(f.properties), f.updated_at])
     }
   } finally {
-    await db.exec(`ALTER TABLE features ENABLE TRIGGER datum_capture_changes`)
+    await db.exec(`ALTER TABLE ${tableName} ENABLE TRIGGER datum_capture_changes`)
   }
 }

@@ -18,11 +18,6 @@ There is currently no way to know if the client is connecting, connected, or dis
 ### Pending writes visibility
 After a local write there is no way to know how many changes are waiting to sync. Applications need a pending write count or event so they can show "saving..." / "synced" indicators.
 
-### Local table name matches server table name
-The local PGlite always creates a table called `features` regardless of the server-side table name. Users syncing a table called `parcels` must still query `SELECT * FROM features` locally — confusing. The local table name should mirror the configured `table` option.
-
-### Multi-table `dbName` default
-When connecting to multiple tables without setting `dbName`, all instances share the same IndexedDB and overwrite each other's data silently. `dbName` should default to the `table` name when one is set.
 
 ### `connect()` timeout and error handling
 On first visit, `connect()` waits indefinitely for the initial snapshot. If the server is unreachable it hangs forever with no error. A configurable timeout and a rejected promise on failure are needed.
@@ -37,6 +32,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Local table name matches server** — the local PGlite table is now named after `config.table`, so queries mirror the server schema exactly. `dbName` also defaults to `config.table` to prevent IndexedDB collisions in multi-table setups.
 - **Multiple tables** — configure multiple tables in `datum.yaml` under `tables:`, each with its own column mapping. Each `DatumClient` instance subscribes to one table by passing `table` in the config.
 - **Configurable column mapping** — set `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml` (or via env vars) to point datum at any existing PostGIS table without renaming columns.
 - **Dynamic bounding box** — `client.setBbox(bbox)` updates the subscription without reconnecting. Server sends a new snapshot for the updated area.
