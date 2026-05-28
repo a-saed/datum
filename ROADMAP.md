@@ -8,9 +8,24 @@ datum supports custom column names via `col_id`, `col_geom`, `col_updated_at`, `
 ### Per-user authentication
 Any client that can reach the WebSocket endpoint can read and write all data. Proper per-user auth (JWT / row-level security) is needed before datum is safe for multi-tenant apps. The `allowed_origin` config option limits browser origins but is not a substitute for user-level access control.
 
+### Connection status and auto-reconnect
+There is currently no way to know if the client is connecting, connected, or disconnected. If the WebSocket drops mid-session the client silently stops syncing — the user must refresh. Needed: a `status` field (`connecting | connected | disconnected`), an `onStatusChange` callback, and automatic reconnect with delta catch-up on recovery.
+
 ---
 
 ## Medium priority
+
+### Pending writes visibility
+After a local write there is no way to know how many changes are waiting to sync. Applications need a pending write count or event so they can show "saving..." / "synced" indicators.
+
+### Local table name matches server table name
+The local PGlite always creates a table called `features` regardless of the server-side table name. Users syncing a table called `parcels` must still query `SELECT * FROM features` locally — confusing. The local table name should mirror the configured `table` option.
+
+### Multi-table `dbName` default
+When connecting to multiple tables without setting `dbName`, all instances share the same IndexedDB and overwrite each other's data silently. `dbName` should default to the `table` name when one is set.
+
+### `connect()` timeout and error handling
+On first visit, `connect()` waits indefinitely for the initial snapshot. If the server is unreachable it hangs forever with no error. A configurable timeout and a rejected promise on failure are needed.
 
 ### Subscription predicates beyond bbox
 bbox is the only subscription filter today. Some use cases need arbitrary predicates — sync all features of type "building", sync features belonging to a project, etc. A WHERE clause on the subscribe message would cover most cases.
