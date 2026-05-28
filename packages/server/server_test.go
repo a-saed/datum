@@ -5,23 +5,63 @@ import (
 	"testing"
 )
 
-func TestBBoxIntersects(t *testing.T) {
+func TestBBoxesIntersect(t *testing.T) {
 	tests := []struct {
 		name       string
 		clientBBox [4]float64
-		point      [2]float64
+		geomBbox   [4]float64
 		want       bool
 	}{
-		{"inside",  [4]float64{-1, -1, 1, 1}, [2]float64{0, 0}, true},
-		{"outside", [4]float64{-1, -1, 1, 1}, [2]float64{5, 5}, false},
-		{"on edge", [4]float64{-1, -1, 1, 1}, [2]float64{1, 1}, true},
+		{"point inside",   [4]float64{-1, -1, 1, 1}, [4]float64{0, 0, 0, 0}, true},
+		{"point outside",  [4]float64{-1, -1, 1, 1}, [4]float64{5, 5, 5, 5}, false},
+		{"point on edge",  [4]float64{-1, -1, 1, 1}, [4]float64{1, 1, 1, 1}, true},
+		{"boxes overlap",  [4]float64{0, 0, 2, 2},   [4]float64{1, 1, 3, 3}, true},
+		{"boxes adjacent", [4]float64{0, 0, 1, 1},   [4]float64{1, 0, 2, 1}, true},
+		{"boxes disjoint", [4]float64{0, 0, 1, 1},   [4]float64{2, 0, 3, 1}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := bboxContainsPoint(tc.clientBBox, tc.point)
+			got := bboxesIntersect(tc.clientBBox, tc.geomBbox)
 			if got != tc.want {
-				t.Errorf("bboxContainsPoint(%v, %v) = %v, want %v",
-					tc.clientBBox, tc.point, got, tc.want)
+				t.Errorf("bboxesIntersect(%v, %v) = %v, want %v",
+					tc.clientBBox, tc.geomBbox, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractBbox(t *testing.T) {
+	tests := []struct {
+		name    string
+		geojson string
+		want    [4]float64
+	}{
+		{
+			"point",
+			`{"type":"Point","coordinates":[10.0,20.0]}`,
+			[4]float64{10, 20, 10, 20},
+		},
+		{
+			"linestring",
+			`{"type":"LineString","coordinates":[[0,0],[5,10],[3,7]]}`,
+			[4]float64{0, 0, 5, 10},
+		},
+		{
+			"polygon",
+			`{"type":"Polygon","coordinates":[[[0,0],[4,0],[4,4],[0,4],[0,0]]]}`,
+			[4]float64{0, 0, 4, 4},
+		},
+		{
+			"empty string",
+			"",
+			[4]float64{},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractBbox(tc.geojson)
+			if got != tc.want {
+				t.Errorf("extractBbox(%q) = %v, want %v", tc.geojson, got, tc.want)
 			}
 		})
 	}

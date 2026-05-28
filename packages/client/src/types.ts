@@ -108,6 +108,7 @@ export interface DeltaMessage {
 
 export interface AckMessage {
   type: 'ack'
+  write_ids: string[]
 }
 
 export type ServerMessage = SnapshotMessage | DeltaMessage | AckMessage

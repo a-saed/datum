@@ -24,6 +24,7 @@ type SubscribeMessage struct {
 }
 
 type WriteEdit struct {
+	WriteID   string         `json:"write_id"`
 	Op        string         `json:"op"`
 	FeatureID string         `json:"feature_id"`
 	Data      map[string]any `json:"data"`
@@ -58,7 +59,8 @@ type DeltaMessage struct {
 }
 
 type AckMessage struct {
-	Type string `json:"type"`
+	Type     string   `json:"type"`
+	WriteIDs []string `json:"write_ids"`
 }
 
 // Internal — LISTEN/NOTIFY payload from PostGIS trigger

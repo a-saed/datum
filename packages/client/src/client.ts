@@ -5,6 +5,7 @@ import { bootLocalDb } from './pglite.js'
 import { drainOutbox, applyDelta, markSynced } from './sync.js'
 import { connectWS, sendMessage } from './ws.js'
 import type {
+  AckMessage,
   ConnectionStatus,
   DatumConfig,
   ServerMessage,
@@ -54,13 +55,19 @@ export class DatumClient {
   private reconnectAttempt = 0
   private isDisconnecting = false
   private resolveReady: (() => void) | null = null
+  private inFlight = new Set<string>()
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
+  private static readonly TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
   private constructor(db: PGlite, clientId: string, config: DatumConfig, isFirstVisit: boolean) {
     this.db = db
     this.clientId = clientId
     this.config = config
-    this.tableName = config.table ?? 'features'
+    const tableName = config.table ?? 'features'
+    if (!DatumClient.TABLE_NAME_RE.test(tableName)) {
+      throw new Error(`datum: invalid table name "${tableName}"`)
+    }
+    this.tableName = tableName
     this.needsSnapshot = isFirstVisit
   }
 
@@ -149,10 +156,6 @@ export class DatumClient {
     return () => this.changeListeners.delete(cb)
   }
 
-  exec(sql: string) {
-    return this.db.exec(sql)
-  }
-
   /**
    * Update the bounding box subscription without reconnecting.
    *
@@ -218,6 +221,8 @@ export class DatumClient {
 
   private onWsClose(): void {
     if (this.isDisconnecting) return
+    // Clear in-flight set so these writes are retried on reconnect.
+    this.inFlight.clear()
     this.setStatus('disconnected')
     this.scheduleReconnect()
   }
@@ -253,11 +258,19 @@ export class DatumClient {
     } else if (msg.type === 'delta') {
       await applyDelta(this.db, msg as DeltaMessage, this.tableName)
       this.notifyChange()
+    } else if (msg.type === 'ack') {
+      const { write_ids } = msg as AckMessage
+      await markSynced(this.db, write_ids)
+      for (const id of write_ids) this.inFlight.delete(id)
+      void this.refreshPendingCount()
     }
   }
 
   private async loadSnapshot(msg: SnapshotMessage): Promise<void> {
-    await this.db.exec(`ALTER TABLE ${this.tableName} DISABLE TRIGGER datum_capture_changes`)
+    await this.db.exec(`
+      ALTER TABLE ${this.tableName} DISABLE TRIGGER datum_capture_changes;
+      BEGIN;
+    `)
     try {
       for (const f of msg.features) {
         await this.db.query(`
@@ -274,6 +287,10 @@ export class DatumClient {
               updated_at = EXCLUDED.updated_at
         `, [f.id, f.geom, JSON.stringify(f.properties), f.updated_at])
       }
+      await this.db.exec('COMMIT;')
+    } catch (err) {
+      await this.db.exec('ROLLBACK;')
+      throw err
     } finally {
       await this.db.exec(`ALTER TABLE ${this.tableName} ENABLE TRIGGER datum_capture_changes`)
     }
@@ -282,8 +299,8 @@ export class DatumClient {
   private async sendSubscribeWithSince(): Promise<void> {
     const { rows } = await this.db.query<{ since: string }>(
       `SELECT COALESCE(
-         to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-         '1970-01-01T00:00:00Z'
+         to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+         '1970-01-01T00:00:00.000Z'
        ) AS since FROM ${this.tableName}`
     )
     sendMessage(this.ws, {
@@ -301,15 +318,17 @@ export class DatumClient {
   }
 
   private async pushOutbox(): Promise<void> {
-    const edits = await drainOutbox(this.db)
-    if (edits.length === 0) return
     if (this.ws.readyState !== WebSocket.OPEN) return
+    const all = await drainOutbox(this.db)
+    // Exclude writes already in-flight (awaiting ack) so they aren't double-sent.
+    const edits = all.filter(e => !this.inFlight.has(e.write_id))
+    if (edits.length === 0) return
+    for (const e of edits) this.inFlight.add(e.write_id)
     sendMessage(this.ws, {
       type: 'write',
       ...(this.config.table ? { table: this.config.table } : {}),
       edits,
     })
-    await markSynced(this.db, edits.map(e => e.write_id))
-    void this.refreshPendingCount()
+    // markSynced is called only after the server sends an ack — see handleMessage.
   }
 }

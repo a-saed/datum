@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
+	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -113,7 +115,8 @@ func main() {
 		})
 	}
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	pool, err := pgxpool.New(ctx, *dbURL)
 	if err != nil {
@@ -130,5 +133,7 @@ func main() {
 
 	srv := newServer(pool, tables, port, allowedOrigin, writeLimit)
 	log.Printf("datum-server: listening on :%s", port)
-	log.Fatal(srv.run(ctx))
+	if err := srv.run(ctx); err != nil {
+		log.Fatalf("datum-server: %v", err)
+	}
 }

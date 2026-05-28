@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -13,6 +14,13 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/time/rate"
+)
+
+const (
+	wsReadLimit    = 1 << 20 // 1 MiB
+	wsPingInterval = 30 * time.Second
+	wsPongWait     = 60 * time.Second
+	wsWriteWait    = 10 * time.Second
 )
 
 // tableState holds the runtime state for one configured table.
@@ -35,15 +43,14 @@ func (ts *tableState) removeClient(id string) {
 	ts.mu.Unlock()
 }
 
-func (ts *tableState) broadcast(msg []byte, originClientID string, geomLon, geomLat float64) {
+func (ts *tableState) broadcast(msg []byte, originClientID string, geomBbox [4]float64) {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	point := [2]float64{geomLon, geomLat}
 	for id, c := range ts.clients {
 		if id == originClientID {
 			continue
 		}
-		if bboxContainsPoint(c.bbox, point) {
+		if bboxesIntersect(c.bbox, geomBbox) {
 			select {
 			case c.send <- msg:
 			default:
@@ -75,6 +82,7 @@ type server struct {
 	writeLimit   int // max writes per minute per IP, 0 = disabled
 	ipLimiters   map[string]*ipLimiter
 	ipMu         sync.Mutex
+	mux          *http.ServeMux
 }
 
 func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin string, writeLimit int) *server {
@@ -84,6 +92,7 @@ func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin str
 		writeLimit: writeLimit,
 		ipLimiters: make(map[string]*ipLimiter),
 		port:       port,
+		mux:        http.NewServeMux(),
 	}
 	for _, ts := range tables {
 		s.tables[ts.name] = ts
@@ -99,6 +108,7 @@ func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin str
 			return r.Header.Get("Origin") == allowedOrigin
 		},
 	}
+	s.mux.HandleFunc("/ws", s.handleWS)
 	return s
 }
 
@@ -112,10 +122,8 @@ func (s *server) resolveTable(name string) *tableState {
 }
 
 func (s *server) run(ctx context.Context) error {
-	http.HandleFunc("/ws", s.handleWS)
-
 	if s.writeLimit > 0 {
-		go s.cleanupLimiters()
+		go s.cleanupLimiters(ctx)
 	}
 
 	go func() {
@@ -130,7 +138,26 @@ func (s *server) run(ctx context.Context) error {
 		}
 	}()
 
-	return http.ListenAndServe(fmt.Sprintf(":%s", s.port), nil)
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf(":%s", s.port),
+		Handler: s.mux,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return httpServer.Shutdown(shutdownCtx)
+	}
 }
 
 func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -140,12 +167,20 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	conn.SetReadLimit(wsReadLimit)
+	_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	})
+
 	client := &wsClient{
 		send: make(chan []byte, 64),
 		conn: conn,
 	}
 
 	go client.writePump()
+
+	clientIP := extractClientIP(r)
 
 	for {
 		_, raw, err := conn.ReadMessage()
@@ -195,8 +230,8 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "write":
-			if s.writeLimit > 0 && !s.allowWrite(r.RemoteAddr) {
-				log.Printf("datum-server: rate limit exceeded for %s", r.RemoteAddr)
+			if s.writeLimit > 0 && !s.allowWrite(clientIP) {
+				log.Printf("datum-server: rate limit exceeded for %s", clientIP)
 				continue
 			}
 			var msg WriteMessage
@@ -208,31 +243,47 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				log.Printf("datum-server: client %s: unknown table %q for write", client.id, msg.Table)
 				continue
 			}
-			if err := applyWrites(r.Context(), s, ts, client.id, msg.Edits); err != nil {
+			writeIDs, err := applyWrites(r.Context(), s, ts, client.id, msg.Edits)
+			if err != nil {
 				log.Printf("datum-server: write error for %s: %v", client.id, err)
+				continue
+			}
+			if len(writeIDs) > 0 {
+				ack := AckMessage{Type: "ack", WriteIDs: writeIDs}
+				if b, err := json.Marshal(ack); err == nil {
+					select {
+					case client.send <- b:
+					default:
+						log.Printf("datum-server: client %s ack buffer full", client.id)
+					}
+				}
 			}
 		}
 	}
 }
 
-func (s *server) allowWrite(remoteAddr string) bool {
+func (s *server) allowWrite(ip string) bool {
 	s.ipMu.Lock()
 	defer s.ipMu.Unlock()
 
-	il, ok := s.ipLimiters[remoteAddr]
+	il, ok := s.ipLimiters[ip]
 	if !ok {
 		r := rate.Every(time.Minute / time.Duration(s.writeLimit))
 		il = &ipLimiter{limiter: rate.NewLimiter(r, s.writeLimit)}
-		s.ipLimiters[remoteAddr] = il
+		s.ipLimiters[ip] = il
 	}
 	il.lastSeen = time.Now()
 	return il.limiter.Allow()
 }
 
 // cleanupLimiters removes IP limiters that haven't been seen in 10 minutes.
-func (s *server) cleanupLimiters() {
+func (s *server) cleanupLimiters(ctx context.Context) {
 	for {
-		time.Sleep(10 * time.Minute)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Minute):
+		}
 		s.ipMu.Lock()
 		for ip, il := range s.ipLimiters {
 			if time.Since(il.lastSeen) > 10*time.Minute {
@@ -243,17 +294,45 @@ func (s *server) cleanupLimiters() {
 	}
 }
 
-// bboxContainsPoint returns true if [lon, lat] is within bbox [minX, minY, maxX, maxY].
-func bboxContainsPoint(bbox [4]float64, point [2]float64) bool {
-	return point[0] >= bbox[0] && point[0] <= bbox[2] &&
-		point[1] >= bbox[1] && point[1] <= bbox[3]
+// extractClientIP returns the real client IP, reading X-Forwarded-For when
+// present (proxy/load-balancer deployments) and stripping the port from
+// RemoteAddr when not.
+func extractClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first (leftmost) address — the original client.
+		if ip, _, err := net.SplitHostPort(xff); err == nil {
+			return ip
+		}
+		return xff
+	}
+	if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return ip
+	}
+	return r.RemoteAddr
 }
 
 func (c *wsClient) writePump() {
-	defer c.conn.Close()
-	for msg := range c.send {
-		if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			return
+	ticker := time.NewTicker(wsPingInterval)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case msg, ok := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if !ok {
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }

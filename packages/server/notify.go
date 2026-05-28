@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -63,47 +64,62 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			continue
 		}
 
-		// Extract centroid lon/lat from GeoJSON for bbox intersection check.
-		// For v0, use the first coordinate of the geometry as an approximation.
-		lon, lat := extractFirstCoordinate(payload.Geom)
-		ts.broadcast(msg, payload.OriginClientID, lon, lat)
+		geomBbox := extractBbox(payload.Geom)
+		ts.broadcast(msg, payload.OriginClientID, geomBbox)
 	}
 }
 
-// extractFirstCoordinate parses a GeoJSON string and returns the first [lon, lat].
-// For points this is exact. For polygons/lines this is an approximation sufficient
-// for v0 bbox intersection — a feature that starts inside the bbox is broadcast.
-func extractFirstCoordinate(geojson string) (float64, float64) {
+// extractBbox returns the bounding box [minX, minY, maxX, maxY] of a GeoJSON geometry.
+// Handles Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon.
+// Returns a zero bbox on error (broadcast will be skipped by intersection check).
+func extractBbox(geojson string) [4]float64 {
 	if geojson == "" {
-		return 0, 0
+		return [4]float64{}
 	}
 	var g struct {
-		Type        string  `json:"type"`
-		Coordinates []any `json:"coordinates"`
+		Type        string `json:"type"`
+		Coordinates any    `json:"coordinates"`
 	}
 	if err := json.Unmarshal([]byte(geojson), &g); err != nil {
-		return 0, 0
+		return [4]float64{}
 	}
-	switch g.Type {
-	case "Point":
-		if coords, ok := g.Coordinates[0].(float64); ok {
-			lat, _ := g.Coordinates[1].(float64)
-			return coords, lat
-		}
-	case "LineString", "MultiPoint":
-		if first, ok := g.Coordinates[0].([]any); ok && len(first) >= 2 {
-			lon, _ := first[0].(float64)
-			lat, _ := first[1].(float64)
-			return lon, lat
-		}
-	case "Polygon", "MultiLineString":
-		if ring, ok := g.Coordinates[0].([]any); ok && len(ring) > 0 {
-			if first, ok := ring[0].([]any); ok && len(first) >= 2 {
-				lon, _ := first[0].(float64)
-				lat, _ := first[1].(float64)
-				return lon, lat
+
+	minX, minY := math.MaxFloat64, math.MaxFloat64
+	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
+
+	var walk func(v any)
+	walk = func(v any) {
+		switch val := v.(type) {
+		case []any:
+			if len(val) >= 2 {
+				if x, ok := val[0].(float64); ok {
+					if y, ok := val[1].(float64); ok {
+						// Check if this looks like a coordinate pair (numbers), not a nested array.
+						if _, nested := val[0].([]any); !nested {
+							if x < minX { minX = x }
+							if x > maxX { maxX = x }
+							if y < minY { minY = y }
+							if y > maxY { maxY = y }
+							return
+						}
+					}
+				}
+			}
+			for _, item := range val {
+				walk(item)
 			}
 		}
 	}
-	return 0, 0
+	walk(g.Coordinates)
+
+	if minX == math.MaxFloat64 {
+		return [4]float64{}
+	}
+	return [4]float64{minX, minY, maxX, maxY}
+}
+
+// bboxesIntersect returns true when two [minX, minY, maxX, maxY] boxes overlap.
+func bboxesIntersect(a, b [4]float64) bool {
+	return a[0] <= b[2] && a[2] >= b[0] &&
+		a[1] <= b[3] && a[3] >= b[1]
 }
