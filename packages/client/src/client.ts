@@ -135,6 +135,21 @@ export class DatumClient {
   }
 
   /**
+   * Update the bounding box subscription without reconnecting.
+   *
+   * The server will send a new snapshot for the updated bbox. Features already
+   * in the local DB remain; new features within the new bbox are merged in.
+   */
+  setBbox(bbox: [number, number, number, number]): void {
+    this.config.bbox = bbox
+    sendMessage(this.ws, {
+      type: 'subscribe',
+      bbox,
+      client_id: this.clientId,
+    })
+  }
+
+  /**
    * Stop the sync cycle and close the WebSocket connection.
    */
   async disconnect(): Promise<void> {

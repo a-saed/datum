@@ -65,6 +65,13 @@ export function Map({ onStatusChange }: Props) {
       }
     })
 
+    map.on('moveend', () => {
+      const c = clientRef.current
+      if (!c) return
+      const b = map.getBounds()
+      c.setBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])
+    })
+
     map.on('click', (e) => {
       const c = clientRef.current
       if (!c) return
