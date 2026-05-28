@@ -47,6 +47,8 @@ export class DatumClient {
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private changeListeners = new Set<() => void>()
+  private pendingListeners = new Set<(count: number) => void>()
+  private _pendingCount = 0
   private _status: ConnectionStatus = 'connecting'
   private needsSnapshot: boolean
   private reconnectAttempt = 0
@@ -102,6 +104,20 @@ export class DatumClient {
     return this._status
   }
 
+  /** Number of local writes waiting to be pushed to the server. */
+  get pendingCount(): number {
+    return this._pendingCount
+  }
+
+  /**
+   * Subscribe to pending write count changes. Fires after every local write
+   * and after every successful sync flush. Returns an unsubscribe function.
+   */
+  onPendingChange(cb: (count: number) => void): () => void {
+    this.pendingListeners.add(cb)
+    return () => this.pendingListeners.delete(cb)
+  }
+
   /**
    * Run a SQL query against the local PGlite database. No network involved.
    *
@@ -115,7 +131,10 @@ export class DatumClient {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]) {
     const result = this.db.query<T>(sql, params)
     if (DatumClient.MUTATION_RE.test(sql)) {
-      void result.then(() => this.notifyChange())
+      void result.then(() => {
+        this.notifyChange()
+        void this.refreshPendingCount()
+      })
     }
     return result
   }
@@ -213,6 +232,16 @@ export class DatumClient {
     for (const cb of this.changeListeners) cb()
   }
 
+  private async refreshPendingCount(): Promise<void> {
+    const { rows } = await this.db.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM _datum_outbox WHERE synced = false`
+    )
+    const count = rows[0].count
+    if (count === this._pendingCount) return
+    this._pendingCount = count
+    for (const cb of this.pendingListeners) cb(count)
+  }
+
   private async handleMessage(msg: ServerMessage): Promise<void> {
     if (msg.type === 'snapshot') {
       await this.loadSnapshot(msg as SnapshotMessage)
@@ -281,5 +310,6 @@ export class DatumClient {
       edits,
     })
     await markSynced(this.db, edits.map(e => e.write_id))
+    void this.refreshPendingCount()
   }
 }
