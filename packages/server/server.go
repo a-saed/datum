@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 )
 
 type wsClient struct {
@@ -21,21 +22,31 @@ type wsClient struct {
 	conn *websocket.Conn
 }
 
-type server struct {
-	pool     *pgxpool.Pool
-	table    string
-	port     string
-	upgrader websocket.Upgrader
-	clients  map[string]*wsClient
-	mu       sync.RWMutex
+type ipLimiter struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
 }
 
-func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string) *server {
+type server struct {
+	pool        *pgxpool.Pool
+	table       string
+	port        string
+	upgrader    websocket.Upgrader
+	clients     map[string]*wsClient
+	mu          sync.RWMutex
+	writeLimit  int // max writes per minute per IP, 0 = disabled
+	ipLimiters  map[string]*ipLimiter
+	ipMu        sync.Mutex
+}
+
+func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string, writeLimit int) *server {
 	s := &server{
-		pool:    pool,
-		table:   table,
-		port:    port,
-		clients: make(map[string]*wsClient),
+		pool:       pool,
+		table:      table,
+		port:       port,
+		clients:    make(map[string]*wsClient),
+		writeLimit: writeLimit,
+		ipLimiters: make(map[string]*ipLimiter),
 	}
 	s.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -50,6 +61,10 @@ func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string) *server {
 
 func (s *server) run(ctx context.Context) error {
 	http.HandleFunc("/ws", s.handleWS)
+
+	if s.writeLimit > 0 {
+		go s.cleanupLimiters()
+	}
 
 	go func() {
 		for {
@@ -109,6 +124,10 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "write":
+			if s.writeLimit > 0 && !s.allowWrite(r.RemoteAddr) {
+				log.Printf("datum-server: rate limit exceeded for %s", r.RemoteAddr)
+				continue
+			}
 			var msg WriteMessage
 			if err := json.Unmarshal(raw, &msg); err != nil {
 				continue
@@ -117,6 +136,34 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				log.Printf("datum-server: write error for %s: %v", client.id, err)
 			}
 		}
+	}
+}
+
+func (s *server) allowWrite(remoteAddr string) bool {
+	s.ipMu.Lock()
+	defer s.ipMu.Unlock()
+
+	il, ok := s.ipLimiters[remoteAddr]
+	if !ok {
+		r := rate.Every(time.Minute / time.Duration(s.writeLimit))
+		il = &ipLimiter{limiter: rate.NewLimiter(r, s.writeLimit)}
+		s.ipLimiters[remoteAddr] = il
+	}
+	il.lastSeen = time.Now()
+	return il.limiter.Allow()
+}
+
+// cleanupLimiters removes IP limiters that haven't been seen in 10 minutes.
+func (s *server) cleanupLimiters() {
+	for {
+		time.Sleep(10 * time.Minute)
+		s.ipMu.Lock()
+		for ip, il := range s.ipLimiters {
+			if time.Since(il.lastSeen) > 10*time.Minute {
+				delete(s.ipLimiters, ip)
+			}
+		}
+		s.ipMu.Unlock()
 	}
 }
 

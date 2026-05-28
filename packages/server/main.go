@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,7 +26,13 @@ func main() {
 	table         := flag.String("table",          envOr("TABLE", ""),          "Table name to sync (required)")
 	port          := flag.String("port",           envOr("PORT", "3000"),       "Port to listen on")
 	allowedOrigin := flag.String("allowed-origin", envOr("ALLOWED_ORIGIN", "*"), "Allowed WebSocket origin (e.g. https://myapp.com). Use * to allow all (dev only)")
+	rateLimitStr  := flag.String("rate-limit",     envOr("RATE_LIMIT", "0"),    "Max write messages per minute per IP. 0 = disabled.")
 	flag.Parse()
+
+	writeLimit, err := strconv.Atoi(*rateLimitStr)
+	if err != nil || writeLimit < 0 {
+		log.Fatalf("datum-server: invalid -rate-limit value %q (must be a non-negative integer)", *rateLimitStr)
+	}
 
 	if *dbURL == "" {
 		log.Fatal("datum-server: -db flag or DATABASE_URL env var is required")
@@ -50,7 +57,7 @@ func main() {
 	}
 	log.Printf("datum-server: migration applied to table %q", *table)
 
-	srv := newServer(pool, *table, *port, *allowedOrigin)
+	srv := newServer(pool, *table, *port, *allowedOrigin, writeLimit)
 	log.Printf("datum-server: listening on :%s", *port)
 	log.Fatal(srv.run(ctx))
 }
