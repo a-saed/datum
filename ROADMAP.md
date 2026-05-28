@@ -25,7 +25,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
-- **Configurable column mapping** — `-col-id`, `-col-geom`, `-col-updated-at`, `-col-properties` flags let you point datum at any existing PostGIS table without renaming columns.
+- **Configurable column mapping** — set `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml` (or via env vars) to point datum at any existing PostGIS table without renaming columns.
 - **Dynamic bounding box** — `client.setBbox(bbox)` updates the subscription without reconnecting. Server sends a new snapshot for the updated area.
 - **React hooks** — `useDatum(client, sql)` from `datum-sync/react`. Reactive queries, no polling.
 - **Live demo** — [a-saed.github.io/datum/demo](https://a-saed.github.io/datum/demo/)

@@ -55,35 +55,50 @@ Open a second browser tab — features added in one tab appear in the other with
 ## How it works
 
 - **Client (`datum-sync` npm package):** PGlite + PostGIS WASM. Full spatial queries run locally.
-- **datum-server (Go):** Thin protocol bridge. Calls PostGIS SQL functions. Contains no spatial logic.
-- **SQL migration:** Installs `datum.sync()`, `datum.write()`, and a `NOTIFY` trigger into your PostGIS.
-
-All spatial intelligence lives in PostGIS. The Go server is replaceable.
+- **datum-server (Go):** Handles WebSocket connections, runs snapshot/write queries directly against PostGIS, and listens for change notifications.
+- **Migration:** Installs a `NOTIFY` trigger into your PostGIS table on startup. That's the only database-side object datum adds.
 
 ## Production deployment
 
-Run datum-server with `-allowed-origin` set to your app's domain to prevent unauthorized WebSocket connections:
+Configure datum-server via a `datum.yaml` file:
 
-```bash
-docker run ghcr.io/a-saed/datum-server \
-  -db "postgres://user:pass@host/mydb" \
-  -table features \
-  -allowed-origin "https://myapp.com"
+```yaml
+port: 3000
+allowed_origin: "https://myapp.com"
+
+table:
+  name: features
+  col_id: id               # optional — defaults match standard column names
+  col_geom: geom
+  col_updated_at: updated_at
+  col_properties: properties
 ```
 
-The default `*` allows all origins and is only suitable for local development.
+```bash
+docker run -v ./datum.yaml:/app/datum.yaml \
+  -e DATABASE_URL="postgres://user:pass@host/mydb" \
+  ghcr.io/a-saed/datum-server -config /app/datum.yaml
+```
 
-> **Security note:** datum-server currently has no user authentication — any client that can reach the WebSocket endpoint can read and write data. Use `-allowed-origin` to restrict browser access, and firewall the port for anything sensitive. Per-user auth is on the [roadmap](ROADMAP.md).
+Or use env vars without a config file:
+
+```bash
+docker run \
+  -e DATABASE_URL="postgres://user:pass@host/mydb" \
+  -e TABLE=features \
+  -e ALLOWED_ORIGIN=https://myapp.com \
+  ghcr.io/a-saed/datum-server
+```
+
+> **Security note:** datum-server has no user authentication — any client that can reach the WebSocket endpoint can read and write data. Set `allowed_origin` to restrict browser access, and firewall the port for anything sensitive. Per-user auth is on the [roadmap](ROADMAP.md).
 
 ## Documentation
 
-- [API reference](docs/api.md) — TypeScript client, server flags, wire protocol, SQL functions
+- [API reference](docs/api.md) — TypeScript client, config file, env vars, wire protocol
 
 ## Architecture
 
-Client (PGlite + PostGIS WASM) ↔ WebSocket ↔ datum-server (Go, ~300 lines) ↔ pgx ↔ PostGIS
-
-All spatial logic lives in PostGIS SQL functions (`datum` schema). The Go server is a stateless protocol bridge — no spatial operations, fully replaceable.
+Client (PGlite + PostGIS WASM) ↔ WebSocket ↔ datum-server (Go) ↔ pgx ↔ PostGIS
 
 ## License
 

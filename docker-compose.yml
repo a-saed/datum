@@ -21,7 +21,9 @@ services:
       dockerfile: packages/server/Dockerfile
     ports:
       - "3000:3000"
-    command: ["-db", "postgres://datum:datum@postgis:5432/datum", "-table", "features", "-port", "3000"]
+    environment:
+      DATABASE_URL: "postgres://datum:datum@postgis:5432/datum"
+      TABLE: "features"
     depends_on:
       postgis:
         condition: service_healthy
