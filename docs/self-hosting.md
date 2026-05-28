@@ -1,13 +1,15 @@
 # Self-Hosting
 
-## Server flags
+## Configuration
 
-| Flag | Required | Default | Description |
+datum-server is configured via a `datum.yaml` file and/or environment variables. Only two CLI flags exist:
+
+| Flag | Env var | Required | Description |
 |---|---|---|---|
-| `-db` | Yes | — | PostgreSQL connection string |
-| `-table` | Yes | — | Table name to sync |
-| `-port` | No | `3000` | Port to listen on |
-| `-allowed-origin` | No | `*` | Allowed WebSocket `Origin`. Set to your app's domain in production. `*` allows all origins — local dev only. |
+| `-db` | `DATABASE_URL` | Yes | PostgreSQL connection string. Keep out of the config file to avoid committing credentials. |
+| `-config` | `CONFIG` | No | Path to `datum.yaml`. |
+
+Everything else — port, origin, tables, column names — goes in `datum.yaml` or as env vars. See [API Reference → datum-server](/api#datum-server-go-binary) for the full config reference.
 
 ## Docker
 
@@ -17,27 +19,35 @@
 docker compose up -d
 ```
 
-**Production** — run datum-server with your PostGIS connection and locked-down origin:
+**Production** — run datum-server with your PostGIS connection:
 
 ```bash
 docker run ghcr.io/a-saed/datum-server \
-  -db "postgres://user:pass@host:5432/mydb" \
-  -table features \
-  -port 3000 \
-  -allowed-origin "https://myapp.com"
+  -e DATABASE_URL="postgres://user:pass@host:5432/mydb" \
+  -e TABLE=features \
+  -e ALLOWED_ORIGIN="https://myapp.com"
+```
+
+Or mount a config file:
+
+```bash
+docker run \
+  -v ./datum.yaml:/app/datum.yaml \
+  -e DATABASE_URL="postgres://user:pass@host:5432/mydb" \
+  ghcr.io/a-saed/datum-server -config /app/datum.yaml
 ```
 
 ## CORS
 
-The `-allowed-origin` flag controls which browser origins are allowed to open a WebSocket connection. Set it to your app's exact origin (scheme + host + port):
+`ALLOWED_ORIGIN` (or `allowed_origin` in `datum.yaml`) controls which browser origins are allowed to open a WebSocket connection. Set it to your app's exact origin (scheme + host + port):
 
-```bash
--allowed-origin "https://myapp.com"       # production
--allowed-origin "http://localhost:5173"   # local dev without Docker
--allowed-origin "*"                       # allow all (dev only)
+```
+https://myapp.com          # production
+http://localhost:5173      # local dev
+*                          # allow all (dev only, the default)
 ```
 
-The default `*` is intentionally permissive for local development. Always set a specific origin in production.
+Always set a specific origin in production.
 
 ## Free-tier deployment (zero cost)
 
@@ -49,7 +59,7 @@ A full datum stack — PostGIS database + Go server + client app — runs for fr
 
 ### Step 1 — Create a Neon database
 
-1. Sign up at [neon.tech](https://neon.tech) and create a new project
+1. Sign up at [neon.tech](https://neon.tech) and create a new project.
 2. In the Neon console, open the SQL editor and enable PostGIS:
    ```sql
    CREATE EXTENSION IF NOT EXISTS postgis;
@@ -74,13 +84,31 @@ Set the allowed origin once your client app URL is known:
 
 ```bash
 fly secrets set ALLOWED_ORIGIN="https://your-app.github.io"
+fly secrets set TABLE="features"
 ```
 
-Update `fly.toml` to pass the flags:
+A minimal `fly.toml`:
 
 ```toml
-[processes]
-  app = "/datum-server -db $DATABASE_URL -table features -allowed-origin $ALLOWED_ORIGIN"
+app = 'my-datum-server'
+primary_region = 'cdg'
+
+[build]
+  image = 'ghcr.io/a-saed/datum-server'
+
+[env]
+  TABLE = "features"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'off'
+  min_machines_running = 1
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
 ```
 
 ### Step 3 — Point your client at the Fly server

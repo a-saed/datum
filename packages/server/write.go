@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func applyWrites(ctx context.Context, s *server, clientID string, edits []WriteEdit) error {
-	cols  := s.cols
-	table := pgx.Identifier{s.table}.Sanitize()
+func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string, edits []WriteEdit) error {
+	cols  := ts.cols
+	table := pgx.Identifier{ts.name}.Sanitize()
 	id    := pgx.Identifier{cols.ID}.Sanitize()
 	geom  := pgx.Identifier{cols.Geom}.Sanitize()
 	props := pgx.Identifier{cols.Properties}.Sanitize()

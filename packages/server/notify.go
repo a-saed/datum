@@ -57,10 +57,16 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			continue
 		}
 
+		ts := s.tables[payload.Table]
+		if ts == nil {
+			log.Printf("datum-server: notify for unknown table %q, ignoring", payload.Table)
+			continue
+		}
+
 		// Extract centroid lon/lat from GeoJSON for bbox intersection check.
 		// For v0, use the first coordinate of the geometry as an approximation.
 		lon, lat := extractFirstCoordinate(payload.Geom)
-		s.broadcast(msg, payload.OriginClientID, lon, lat)
+		ts.broadcast(msg, payload.OriginClientID, lon, lat)
 	}
 }
 

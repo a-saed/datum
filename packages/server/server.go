@@ -15,11 +15,50 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// tableState holds the runtime state for one configured table.
+type tableState struct {
+	name    string
+	cols    ColumnConfig
+	clients map[string]*wsClient
+	mu      sync.RWMutex
+}
+
+func (ts *tableState) addClient(c *wsClient) {
+	ts.mu.Lock()
+	ts.clients[c.id] = c
+	ts.mu.Unlock()
+}
+
+func (ts *tableState) removeClient(id string) {
+	ts.mu.Lock()
+	delete(ts.clients, id)
+	ts.mu.Unlock()
+}
+
+func (ts *tableState) broadcast(msg []byte, originClientID string, geomLon, geomLat float64) {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	point := [2]float64{geomLon, geomLat}
+	for id, c := range ts.clients {
+		if id == originClientID {
+			continue
+		}
+		if bboxContainsPoint(c.bbox, point) {
+			select {
+			case c.send <- msg:
+			default:
+				log.Printf("datum-server: client %s send buffer full, dropping delta", id)
+			}
+		}
+	}
+}
+
 type wsClient struct {
-	id   string
-	bbox [4]float64
-	send chan []byte
-	conn *websocket.Conn
+	id    string
+	table string // which table this client is subscribed to
+	bbox  [4]float64
+	send  chan []byte
+	conn  *websocket.Conn
 }
 
 type ipLimiter struct {
@@ -28,27 +67,29 @@ type ipLimiter struct {
 }
 
 type server struct {
-	pool        *pgxpool.Pool
-	table       string
-	cols        ColumnConfig
-	port        string
-	upgrader    websocket.Upgrader
-	clients     map[string]*wsClient
-	mu          sync.RWMutex
-	writeLimit  int // max writes per minute per IP, 0 = disabled
-	ipLimiters  map[string]*ipLimiter
-	ipMu        sync.Mutex
+	pool         *pgxpool.Pool
+	tables       map[string]*tableState
+	defaultTable string // set when only one table is configured
+	port         string
+	upgrader     websocket.Upgrader
+	writeLimit   int // max writes per minute per IP, 0 = disabled
+	ipLimiters   map[string]*ipLimiter
+	ipMu         sync.Mutex
 }
 
-func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string, writeLimit int, cols ColumnConfig) *server {
+func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin string, writeLimit int) *server {
 	s := &server{
 		pool:       pool,
-		table:      table,
-		cols:       cols,
-		port:       port,
-		clients:    make(map[string]*wsClient),
+		tables:     make(map[string]*tableState, len(tables)),
 		writeLimit: writeLimit,
 		ipLimiters: make(map[string]*ipLimiter),
+		port:       port,
+	}
+	for _, ts := range tables {
+		s.tables[ts.name] = ts
+	}
+	if len(tables) == 1 {
+		s.defaultTable = tables[0].name
 	}
 	s.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -59,6 +100,15 @@ func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string, writeLimit
 		},
 	}
 	return s
+}
+
+// resolveTable returns the tableState for the given name, falling back to
+// defaultTable when name is empty (single-table backwards compat).
+func (s *server) resolveTable(name string) *tableState {
+	if name == "" && s.defaultTable != "" {
+		return s.tables[s.defaultTable]
+	}
+	return s.tables[name]
 }
 
 func (s *server) run(ctx context.Context) error {
@@ -100,7 +150,14 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			s.removeClient(client.id)
+			if client.table != "" {
+				if ts := s.tables[client.table]; ts != nil {
+					ts.removeClient(client.id)
+				}
+			}
+			// removeClient holds a WLock that blocks until any in-flight broadcast
+			// finishes, so closing the channel here cannot race with a send.
+			close(client.send)
 			return
 		}
 
@@ -117,11 +174,23 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(raw, &msg); err != nil {
 				continue
 			}
-			client.id   = msg.ClientID
-			client.bbox = msg.BBox
-			s.addClient(client)
+			ts := s.resolveTable(msg.Table)
+			if ts == nil {
+				log.Printf("datum-server: client %s: unknown table %q", msg.ClientID, msg.Table)
+				continue
+			}
+			// Remove from old table if the client is switching tables.
+			if client.table != "" && client.table != ts.name {
+				if old := s.tables[client.table]; old != nil {
+					old.removeClient(client.id)
+				}
+			}
+			client.id    = msg.ClientID
+			client.table = ts.name
+			client.bbox  = msg.BBox
+			ts.addClient(client)
 
-			if err := sendSnapshot(r.Context(), s, client, msg.Since); err != nil {
+			if err := sendSnapshot(r.Context(), s, ts, client, msg.Since); err != nil {
 				log.Printf("datum-server: snapshot error for %s: %v", client.id, err)
 			}
 
@@ -134,7 +203,12 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(raw, &msg); err != nil {
 				continue
 			}
-			if err := applyWrites(r.Context(), s, client.id, msg.Edits); err != nil {
+			ts := s.resolveTable(msg.Table)
+			if ts == nil {
+				log.Printf("datum-server: client %s: unknown table %q for write", client.id, msg.Table)
+				continue
+			}
+			if err := applyWrites(r.Context(), s, ts, client.id, msg.Edits); err != nil {
 				log.Printf("datum-server: write error for %s: %v", client.id, err)
 			}
 		}
@@ -166,37 +240,6 @@ func (s *server) cleanupLimiters() {
 			}
 		}
 		s.ipMu.Unlock()
-	}
-}
-
-func (s *server) addClient(c *wsClient) {
-	s.mu.Lock()
-	s.clients[c.id] = c
-	s.mu.Unlock()
-}
-
-func (s *server) removeClient(id string) {
-	s.mu.Lock()
-	delete(s.clients, id)
-	s.mu.Unlock()
-}
-
-func (s *server) broadcast(msg []byte, originClientID string, geomLon, geomLat float64) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	point := [2]float64{geomLon, geomLat}
-	for id, c := range s.clients {
-		if id == originClientID {
-			continue
-		}
-		if bboxContainsPoint(c.bbox, point) {
-			select {
-			case c.send <- msg:
-			default:
-				log.Printf("datum-server: client %s send buffer full, dropping delta", id)
-			}
-		}
 	}
 }
 

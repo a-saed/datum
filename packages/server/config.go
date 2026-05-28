@@ -10,10 +10,11 @@ import (
 
 // Config is the structure of datum.yaml.
 type Config struct {
-	Port          string    `yaml:"port"`
-	AllowedOrigin string    `yaml:"allowed_origin"`
-	RateLimit     int       `yaml:"rate_limit"`
-	Table         TableConf `yaml:"table"`
+	Port          string      `yaml:"port"`
+	AllowedOrigin string      `yaml:"allowed_origin"`
+	RateLimit     int         `yaml:"rate_limit"`
+	Table         TableConf   `yaml:"table"`   // single-table shorthand (backwards compat)
+	Tables        []TableConf `yaml:"tables"`  // multi-table list
 }
 
 // TableConf holds the table name and its column mapping.

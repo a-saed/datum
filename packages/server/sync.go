@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func sendSnapshot(ctx context.Context, s *server, client *wsClient, since string) error {
+func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClient, since string) error {
 	var sinceTime time.Time
 	if since != "" {
 		if t, err := time.Parse(time.RFC3339Nano, since); err == nil {
@@ -18,8 +18,8 @@ func sendSnapshot(ctx context.Context, s *server, client *wsClient, since string
 		}
 	}
 
-	cols  := s.cols
-	table := pgx.Identifier{s.table}.Sanitize()
+	cols  := ts.cols
+	table := pgx.Identifier{ts.name}.Sanitize()
 	id    := pgx.Identifier{cols.ID}.Sanitize()
 	geom  := pgx.Identifier{cols.Geom}.Sanitize()
 	props := pgx.Identifier{cols.Properties}.Sanitize()

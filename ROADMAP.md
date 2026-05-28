@@ -3,13 +3,10 @@
 ## High priority
 
 ### Typed column support
-datum now supports custom column names via `-col-id`, `-col-geom`, `-col-updated-at`, `-col-properties`. However the `properties` column must still be a single `JSONB` bag. Users with typed columns (`name TEXT`, `height FLOAT`, etc.) need typed column support so datum can map individual columns into the properties object automatically.
-
-### Multiple tables
-The server is configured with a single `-table` flag. Real apps need to sync multiple tables together with a single connection. Each table would have its own bbox subscription and outbox.
+datum supports custom column names via `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml`. However the `properties` column must still be a single `JSONB` bag. Users with typed columns (`name TEXT`, `height FLOAT`, etc.) need typed column support so datum can map individual columns into the properties object automatically.
 
 ### Per-user authentication
-Any client that can reach the WebSocket endpoint can read and write all data. Proper per-user auth (JWT / row-level security) is needed before datum is safe for multi-tenant apps. The `-allowed-origin` flag limits browser origins but is not a substitute for user-level access control.
+Any client that can reach the WebSocket endpoint can read and write all data. Proper per-user auth (JWT / row-level security) is needed before datum is safe for multi-tenant apps. The `allowed_origin` config option limits browser origins but is not a substitute for user-level access control.
 
 ---
 
@@ -25,6 +22,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Multiple tables** — configure multiple tables in `datum.yaml` under `tables:`, each with its own column mapping. Each `DatumClient` instance subscribes to one table by passing `table` in the config.
 - **Configurable column mapping** — set `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml` (or via env vars) to point datum at any existing PostGIS table without renaming columns.
 - **Dynamic bounding box** — `client.setBbox(bbox)` updates the subscription without reconnecting. Server sends a new snapshot for the updated area.
 - **React hooks** — `useDatum(client, sql)` from `datum-sync/react`. Reactive queries, no polling.

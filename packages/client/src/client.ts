@@ -80,6 +80,7 @@ export class DatumClient {
             type: 'subscribe',
             bbox: config.bbox,
             client_id: clientId,
+            ...(config.table ? { table: config.table } : {}),
           })
         },
       )
@@ -146,6 +147,7 @@ export class DatumClient {
       type: 'subscribe',
       bbox,
       client_id: this.clientId,
+      ...(this.config.table ? { table: this.config.table } : {}),
     })
   }
 
@@ -207,6 +209,7 @@ export class DatumClient {
       type: 'subscribe',
       bbox: this.config.bbox,
       client_id: this.clientId,
+      ...(this.config.table ? { table: this.config.table } : {}),
       since: rows[0].since,
     })
   }
@@ -220,7 +223,11 @@ export class DatumClient {
     const edits = await drainOutbox(this.db)
     if (edits.length === 0) return
     if (this.ws.readyState !== WebSocket.OPEN) return
-    sendMessage(this.ws, { type: 'write', edits })
+    sendMessage(this.ws, {
+      type: 'write',
+      ...(this.config.table ? { table: this.config.table } : {}),
+      edits,
+    })
     await markSynced(this.db, edits.map(e => e.write_id))
   }
 }

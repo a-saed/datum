@@ -19,6 +19,6 @@ CREATE INDEX IF NOT EXISTS {{TABLE_NAME}}_geom_idx ON {{TABLE}} USING GIST (geom
 DROP FUNCTION IF EXISTS datum.sync(geometry, timestamptz);
 DROP FUNCTION IF EXISTS datum.write(jsonb);
 
--- datum.notify_change() and the trigger are created by datum-server at startup
--- because they reference the configured column names (which may differ from the defaults).
+-- datum.notify_change_<tablename>() and the datum_notify_change trigger are created by
+-- datum-server at startup because they reference the configured column names.
 -- datum-server runs these separately after substituting column identifiers.

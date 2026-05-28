@@ -3,7 +3,6 @@ package main
 
 import (
 	"testing"
-	"time"
 )
 
 func TestBBoxIntersects(t *testing.T) {
@@ -28,8 +27,36 @@ func TestBBoxIntersects(t *testing.T) {
 	}
 }
 
-func TestSendSnapshotSinceParam(t *testing.T) {
-	// sendSnapshot uses sinceTime to filter — verify zero time and future time compile cleanly.
-	var _ = time.Time{}
-	var _ = "2026-01-01T00:00:00Z"
+func TestResolveTable(t *testing.T) {
+	features := &tableState{name: "features", clients: make(map[string]*wsClient)}
+	sites    := &tableState{name: "sites",    clients: make(map[string]*wsClient)}
+
+	// Multi-table server — no default
+	multi := &server{
+		tables: map[string]*tableState{"features": features, "sites": sites},
+	}
+	if multi.resolveTable("features") != features {
+		t.Error("expected features table")
+	}
+	if multi.resolveTable("sites") != sites {
+		t.Error("expected sites table")
+	}
+	if multi.resolveTable("") != nil {
+		t.Error("empty name on multi-table server should return nil")
+	}
+	if multi.resolveTable("unknown") != nil {
+		t.Error("unknown table should return nil")
+	}
+
+	// Single-table server — has a default
+	single := &server{
+		tables:       map[string]*tableState{"features": features},
+		defaultTable: "features",
+	}
+	if single.resolveTable("") != features {
+		t.Error("empty name on single-table server should return defaultTable")
+	}
+	if single.resolveTable("features") != features {
+		t.Error("explicit name should still work on single-table server")
+	}
 }

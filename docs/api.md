@@ -23,6 +23,7 @@ const db = await DatumClient.connect({
 |---|---|---|---|
 | `serverUrl` | `string` | Yes | WebSocket URL of datum-server |
 | `bbox` | `[minX, minY, maxX, maxY]` | Yes | Bounding box in WGS-84. Only features intersecting this box are synced. |
+| `table` | `string` | No | Server-side table name. Required when datum-server is configured with multiple tables; omit for single-table setups. |
 | `syncInterval` | `number` (ms) | No | How often local writes are pushed to the server. Default: `5000` |
 | `dbName` | `string` | No | IndexedDB database name. Use distinct names when running multiple datum instances on the same origin. Default: `"datum"` |
 
@@ -179,6 +180,7 @@ function FeatureList() {
 
 The recommended way to configure datum-server is a `datum.yaml` file:
 
+**Single table:**
 ```yaml
 port: 3000
 allowed_origin: "https://myapp.com"
@@ -190,6 +192,37 @@ table:
   col_geom: location        # default: geom
   col_updated_at: modified_at  # default: updated_at
   col_properties: attrs     # default: properties
+```
+
+**Multiple tables:**
+```yaml
+port: 3000
+allowed_origin: "https://myapp.com"
+
+tables:
+  - name: sites
+    col_id: site_id
+    col_geom: location
+  - name: parcels
+    col_updated_at: modified_at
+```
+
+Each table can have its own column mapping; any omitted column uses the default name (`id`, `geom`, `updated_at`, `properties`).
+
+When using multiple tables, pass `table` in the client config to tell the server which table to subscribe to:
+
+```ts
+const sitesDb = await DatumClient.connect({
+  serverUrl: 'ws://localhost:3000/ws',
+  bbox: [-122.5, 37.7, -122.4, 37.8],
+  table: 'sites',
+})
+
+const parcelsDb = await DatumClient.connect({
+  serverUrl: 'ws://localhost:3000/ws',
+  bbox: [-122.5, 37.7, -122.4, 37.8],
+  table: 'parcels',
+})
 ```
 
 Run with:
@@ -212,6 +245,8 @@ Only two flags exist — everything else goes in the config file:
 ### Env var overrides
 
 All config file fields can be overridden via env vars — useful for Docker and deployment environments where you don't want to mount a config file. **Precedence: env var > config file > default.**
+
+> Env var overrides apply to single-table mode only. For multiple tables, use a `datum.yaml` with the `tables:` list.
 
 | Env var | Config file key | Default |
 |---|---|---|
@@ -246,9 +281,12 @@ datum-server speaks JSON over WebSocket at `/ws`.
   "type": "subscribe",
   "bbox": [-122.5, 37.7, -122.4, 37.8],
   "client_id": "uuid",
+  "table": "sites",
   "since": "2026-05-01T00:00:00Z"
 }
 ```
+
+`table` — omit when the server is configured with a single table. Required when using `tables:` in the server config.
 
 `since` is an ISO-8601 timestamp. Omit it (or set it to the epoch) to receive the full snapshot. On returning visits, datum automatically sets this to `MAX(updated_at)` from the local database so the server only returns changed features.
 
@@ -256,6 +294,7 @@ datum-server speaks JSON over WebSocket at `/ws`.
 ```json
 {
   "type": "write",
+  "table": "sites",
   "edits": [
     {
       "write_id": "uuid",
@@ -272,7 +311,7 @@ datum-server speaks JSON over WebSocket at `/ws`.
 }
 ```
 
-`op` is one of `"insert"`, `"update"`, `"delete"`.
+`op` is one of `"insert"`, `"update"`, `"delete"`. `table` follows the same rule as subscribe — omit for single-table setups.
 
 ### Server → Client
 
@@ -316,14 +355,14 @@ Installed automatically by datum-server on startup. Idempotent — safe to run m
 
 ### Required table schema
 
-datum-server creates the table if it does not exist. If you are bringing an **existing** PostGIS table, it must have four columns that map to these roles — use the `-col-*` flags to point datum at your actual column names:
+datum-server creates the table if it does not exist. If you are bringing an **existing** PostGIS table, it must have four columns that map to these roles — use `col_id`, `col_geom`, etc. in `datum.yaml` to point datum at your actual column names:
 
-| Role | Default column | Flag |
+| Role | Default column | Config key |
 |---|---|---|
-| UUID primary key | `id` | `-col-id` |
-| PostGIS geometry (WGS-84) | `geom` | `-col-geom` |
-| JSONB properties bag | `properties` | `-col-properties` |
-| Last-modified timestamp | `updated_at` | `-col-updated-at` |
+| UUID primary key | `id` | `col_id` |
+| PostGIS geometry (WGS-84) | `geom` | `col_geom` |
+| JSONB properties bag | `properties` | `col_properties` |
+| Last-modified timestamp | `updated_at` | `col_updated_at` |
 
 - **geometry** — any PostGIS geometry type in EPSG:4326. Points, lines, and polygons all work.
 - **properties** — free-form JSONB for any additional attributes. Must be a single `JSONB` column today — typed columns (`name TEXT`, `height FLOAT`) are on the roadmap.
@@ -331,8 +370,8 @@ datum-server creates the table if it does not exist. If you are bringing an **ex
 
 datum-server installs a spatial index on the geometry column and attaches the `datum_notify_change` trigger to the table.
 
-### `datum.notify_change()` trigger
+### `datum.notify_change_<tablename>()` trigger
 
-Fires on INSERT/UPDATE/DELETE and calls `pg_notify('datum_changes', payload)`. Payload includes `origin_client_id` from the session variable `datum.client_id` (set by datum-server during write transactions) so the server can skip echoing changes back to the originating client.
+One trigger function is created per configured table (e.g. `datum.notify_change_features`, `datum.notify_change_sites`). It fires on INSERT/UPDATE/DELETE and calls `pg_notify('datum_changes', payload)`. The payload includes the table name and `origin_client_id` (from the session variable `datum.client_id` set by datum-server during write transactions) so the server can route deltas to the correct subscribers and skip echoing changes back to the originating client.
 
-This is the only database-side object datum installs beyond the table and index. Snapshot queries and write logic run in the Go server directly.
+These trigger functions, the `datum_notify_change` trigger on each table, and any spatial indices are the only database-side objects datum installs beyond the tables themselves. Snapshot queries and write logic run in the Go server directly.

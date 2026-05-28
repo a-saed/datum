@@ -23,19 +23,26 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool, table string, cols Co
 		return fmt.Errorf("run migration: %w", err)
 	}
 
-	// Generate the notify trigger function with the configured column names.
-	idCol         := pgx.Identifier{cols.ID}.Sanitize()
-	geomCol       := pgx.Identifier{cols.Geom}.Sanitize()
-	propsCol      := pgx.Identifier{cols.Properties}.Sanitize()
-	updatedAtCol  := pgx.Identifier{cols.UpdatedAt}.Sanitize()
+	// Drop the legacy generic trigger function (pre-multi-table) so it doesn't
+	// linger. CASCADE drops any trigger that still references it.
+	if _, err := pool.Exec(ctx, `DROP FUNCTION IF EXISTS datum.notify_change() CASCADE`); err != nil {
+		return fmt.Errorf("drop legacy trigger function: %w", err)
+	}
+
+	idCol        := pgx.Identifier{cols.ID}.Sanitize()
+	geomCol      := pgx.Identifier{cols.Geom}.Sanitize()
+	propsCol     := pgx.Identifier{cols.Properties}.Sanitize()
+	updatedAtCol := pgx.Identifier{cols.UpdatedAt}.Sanitize()
+	funcIdent    := pgx.Identifier{"datum", "notify_change_" + table}.Sanitize()
 
 	triggerFnSQL := fmt.Sprintf(`
-		CREATE OR REPLACE FUNCTION datum.notify_change()
+		CREATE OR REPLACE FUNCTION %s()
 		RETURNS TRIGGER AS $$
 		DECLARE payload jsonb;
 		BEGIN
 			IF TG_OP = 'DELETE' THEN
 				payload := jsonb_build_object(
+					'table',            TG_TABLE_NAME,
 					'op',               'delete',
 					'id',               OLD.%s,
 					'geom',             ST_AsGeoJSON(OLD.%s),
@@ -45,6 +52,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool, table string, cols Co
 				);
 			ELSE
 				payload := jsonb_build_object(
+					'table',            TG_TABLE_NAME,
 					'op',               lower(TG_OP),
 					'id',               NEW.%s,
 					'geom',             ST_AsGeoJSON(NEW.%s),
@@ -57,6 +65,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool, table string, cols Co
 			IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
 		END;
 		$$ LANGUAGE plpgsql;`,
+		funcIdent,
 		idCol, geomCol, propsCol, updatedAtCol,
 		idCol, geomCol, propsCol, updatedAtCol,
 	)
@@ -68,8 +77,8 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool, table string, cols Co
 	triggerSQL := fmt.Sprintf(`
 		CREATE OR REPLACE TRIGGER datum_notify_change
 		AFTER INSERT OR UPDATE OR DELETE ON %s
-		FOR EACH ROW EXECUTE FUNCTION datum.notify_change()
-	`, quoted)
+		FOR EACH ROW EXECUTE FUNCTION %s()
+	`, quoted, funcIdent)
 
 	if _, err := pool.Exec(ctx, triggerSQL); err != nil {
 		return fmt.Errorf("create trigger: %w", err)

@@ -66,12 +66,16 @@ Configure datum-server via a `datum.yaml` file:
 port: 3000
 allowed_origin: "https://myapp.com"
 
+# Single table:
 table:
   name: features
   col_id: id               # optional — defaults match standard column names
-  col_geom: geom
-  col_updated_at: updated_at
-  col_properties: properties
+
+# Or multiple tables, each with its own column mapping:
+# tables:
+#   - name: sites
+#   - name: parcels
+#     col_updated_at: modified_at
 ```
 
 ```bash

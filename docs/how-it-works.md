@@ -18,7 +18,7 @@ Writes (`INSERT`, `UPDATE`, `DELETE`) are captured by an outbox trigger in the l
 
 ## Bounding box subscriptions
 
-On connect, the client sends a `subscribe` message declaring a bounding box. datum-server calls `datum.sync(bbox, since)` on the PostGIS database and returns only features that intersect the box. This is the initial snapshot.
+On connect, the client sends a `subscribe` message declaring a bounding box. datum-server runs a spatial query directly against your PostGIS table and returns only features that intersect the box. This is the initial snapshot.
 
 From that point on, the server only pushes delta messages to clients whose bounding box intersects the changed feature. A feature updated in San Francisco is never sent to a client subscribed to London. This keeps the wire protocol efficient regardless of total dataset size.
 
@@ -29,8 +29,8 @@ The full write path:
 1. Client writes to local PGlite via `db.query('INSERT ...')`
 2. The `_datum_capture_change` trigger captures the write into `_datum_outbox`
 3. Every `syncInterval` ms (default 5000), the client drains the outbox and sends a `write` message to datum-server over WebSocket
-4. datum-server calls `datum.write(edits)` on PostGIS — last-write-wins on conflict
-5. A `NOTIFY` trigger fires on the PostGIS table
+4. datum-server applies each edit directly to PostGIS — last-write-wins on conflict
+5. The `datum_notify_change` trigger fires on the PostGIS table
 6. datum-server listens for `NOTIFY` and broadcasts a `delta` message to all other clients whose bbox intersects the changed feature
 
 The originating client never receives its own delta back.

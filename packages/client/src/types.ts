@@ -33,6 +33,11 @@ export interface DatumConfig {
    */
   bbox: [number, number, number, number]
   /**
+   * Server-side table name. Required when datum-server is configured with
+   * multiple tables; omit (or leave undefined) for single-table setups.
+   */
+  table?: string
+  /**
    * How often (in milliseconds) to push local writes to the server.
    * @default 5000
    */
@@ -63,11 +68,13 @@ export interface SubscribeMessage {
   type: 'subscribe'
   bbox: [number, number, number, number]
   client_id: string
+  table?: string // omit for single-table configs
   since?: string // ISO-8601; omitted on first visit (server returns full snapshot)
 }
 
 export interface WriteMessage {
   type: 'write'
+  table?: string // omit for single-table configs
   edits: ChangeEvent[]
 }
 
