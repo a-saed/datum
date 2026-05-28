@@ -5,9 +5,6 @@ primary_region = 'cdg'
   image = 'ghcr.io/a-saed/datum-server'
 
 [env]
-  TABLE = "features"
-  ALLOWED_ORIGIN = "https://a-saed.github.io"
-  RATE_LIMIT = "5"
 
 [http_service]
   internal_port = 3000

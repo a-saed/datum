@@ -9,5 +9,6 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=build /app/datum-server .
+COPY datum.yaml .
 EXPOSE 3000
-ENTRYPOINT ["./datum-server"]
+ENTRYPOINT ["./datum-server", "-config", "datum.yaml"]
