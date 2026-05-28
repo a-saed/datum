@@ -1,6 +1,18 @@
 // packages/server/types.go
 package main
 
+// ColumnConfig maps datum's logical column roles to the actual column names in the user's table.
+type ColumnConfig struct {
+	ID         string // primary key UUID column (default: "id")
+	Geom       string // PostGIS geometry column (default: "geom")
+	UpdatedAt  string // last-modified timestamp column (default: "updated_at")
+	Properties string // JSONB properties column (default: "properties")
+}
+
+func defaultColumns() ColumnConfig {
+	return ColumnConfig{ID: "id", Geom: "geom", UpdatedAt: "updated_at", Properties: "properties"}
+}
+
 // Wire protocol — client → server
 type SubscribeMessage struct {
 	Type     string     `json:"type"`

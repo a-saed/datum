@@ -30,6 +30,7 @@ type ipLimiter struct {
 type server struct {
 	pool        *pgxpool.Pool
 	table       string
+	cols        ColumnConfig
 	port        string
 	upgrader    websocket.Upgrader
 	clients     map[string]*wsClient
@@ -39,10 +40,11 @@ type server struct {
 	ipMu        sync.Mutex
 }
 
-func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string, writeLimit int) *server {
+func newServer(pool *pgxpool.Pool, table, port, allowedOrigin string, writeLimit int, cols ColumnConfig) *server {
 	s := &server{
 		pool:       pool,
 		table:      table,
+		cols:       cols,
 		port:       port,
 		clients:    make(map[string]*wsClient),
 		writeLimit: writeLimit,
