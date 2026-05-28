@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -14,45 +15,69 @@ import (
 
 var tableNameRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
 func main() {
-	defaults      := defaultColumns()
-	dbURL         := flag.String("db",             envOr("DATABASE_URL", ""),             "PostgreSQL connection URL (required)")
-	table         := flag.String("table",          envOr("TABLE", ""),                    "Table name to sync (required)")
-	port          := flag.String("port",           envOr("PORT", "3000"),                 "Port to listen on")
-	allowedOrigin := flag.String("allowed-origin", envOr("ALLOWED_ORIGIN", "*"),          "Allowed WebSocket origin (e.g. https://myapp.com). Use * to allow all (dev only)")
-	rateLimitStr  := flag.String("rate-limit",     envOr("RATE_LIMIT", "0"),              "Max write messages per minute per IP. 0 = disabled.")
-	colID         := flag.String("col-id",         envOr("COL_ID", defaults.ID),         "UUID primary key column name")
-	colGeom       := flag.String("col-geom",       envOr("COL_GEOM", defaults.Geom),     "Geometry column name")
-	colUpdatedAt  := flag.String("col-updated-at", envOr("COL_UPDATED_AT", defaults.UpdatedAt),  "Updated-at timestamp column name")
-	colProperties := flag.String("col-properties", envOr("COL_PROPERTIES", defaults.Properties), "JSONB properties column name")
+	configPath    := flag.String("config",         os.Getenv("CONFIG"),         "Path to datum.yaml config file")
+	dbURL         := flag.String("db",             os.Getenv("DATABASE_URL"),   "PostgreSQL connection URL (required)")
+	tableFlag     := flag.String("table",          "",                          "Table name to sync (overrides config file)")
+	portFlag      := flag.String("port",           "",                          "Port to listen on (overrides config file)")
+	originFlag    := flag.String("allowed-origin", "",                          "Allowed WebSocket origin (overrides config file)")
+	rateLimitFlag := flag.String("rate-limit",     "",                          "Max write messages per minute per IP, 0=disabled (overrides config file)")
+	colIDFlag     := flag.String("col-id",         "",                          "UUID primary key column name (overrides config file)")
+	colGeomFlag   := flag.String("col-geom",       "",                          "Geometry column name (overrides config file)")
+	colUpdAtFlag  := flag.String("col-updated-at", "",                          "Updated-at column name (overrides config file)")
+	colPropsFlag  := flag.String("col-properties", "",                          "JSONB properties column name (overrides config file)")
 	flag.Parse()
 
-	writeLimit, err := strconv.Atoi(*rateLimitStr)
-	if err != nil || writeLimit < 0 {
-		log.Fatalf("datum-server: invalid -rate-limit value %q (must be a non-negative integer)", *rateLimitStr)
+	// Load config file if provided, then apply env vars and flags as overrides.
+	var fileCfg Config
+	if *configPath != "" {
+		var err error
+		fileCfg, err = loadConfig(*configPath)
+		if err != nil {
+			log.Fatalf("datum-server: %v", err)
+		}
 	}
 
+	// Precedence: flag > env var > config file > hardcoded default
+	defaults := defaultColumns()
+	port          := coalesce(*portFlag,      os.Getenv("PORT"),           fileCfg.Port,                   "3000")
+	allowedOrigin := coalesce(*originFlag,    os.Getenv("ALLOWED_ORIGIN"), fileCfg.AllowedOrigin,          "*")
+	table         := coalesce(*tableFlag,     os.Getenv("TABLE"),          fileCfg.Table.Name)
+	colID         := coalesce(*colIDFlag,     os.Getenv("COL_ID"),         fileCfg.Table.ColID,            defaults.ID)
+	colGeom       := coalesce(*colGeomFlag,   os.Getenv("COL_GEOM"),       fileCfg.Table.ColGeom,          defaults.Geom)
+	colUpdAt      := coalesce(*colUpdAtFlag,  os.Getenv("COL_UPDATED_AT"), fileCfg.Table.ColUpdatedAt,     defaults.UpdatedAt)
+	colProps      := coalesce(*colPropsFlag,  os.Getenv("COL_PROPERTIES"), fileCfg.Table.ColProperties,    defaults.Properties)
+
+	// rate_limit: treat config file value of 0 as "unset" (0 is also the default).
+	fileRateLimit := ""
+	if fileCfg.RateLimit > 0 {
+		fileRateLimit = fmt.Sprintf("%d", fileCfg.RateLimit)
+	}
+	rateLimitStr := coalesce(*rateLimitFlag, os.Getenv("RATE_LIMIT"), fileRateLimit, "0")
+
+	// Validate
 	if *dbURL == "" {
 		log.Fatal("datum-server: -db flag or DATABASE_URL env var is required")
 	}
-	if *table == "" {
-		log.Fatal("datum-server: -table flag or TABLE env var is required")
+	if table == "" {
+		log.Fatal("datum-server: table name is required (set in config file under table.name or via -table flag)")
 	}
-	if !tableNameRe.MatchString(*table) {
-		log.Fatalf("datum-server: invalid table name %q (only [a-zA-Z_][a-zA-Z0-9_]*)", *table)
+	if !tableNameRe.MatchString(table) {
+		log.Fatalf("datum-server: invalid table name %q (only [a-zA-Z_][a-zA-Z0-9_]*)", table)
 	}
 
-	cols := ColumnConfig{ID: *colID, Geom: *colGeom, UpdatedAt: *colUpdatedAt, Properties: *colProperties}
-	for label, name := range map[string]string{"col-id": cols.ID, "col-geom": cols.Geom, "col-updated-at": cols.UpdatedAt, "col-properties": cols.Properties} {
+	writeLimit, err := strconv.Atoi(rateLimitStr)
+	if err != nil || writeLimit < 0 {
+		log.Fatalf("datum-server: invalid rate-limit value %q (must be a non-negative integer)", rateLimitStr)
+	}
+
+	cols := ColumnConfig{ID: colID, Geom: colGeom, UpdatedAt: colUpdAt, Properties: colProps}
+	for label, name := range map[string]string{
+		"col-id": cols.ID, "col-geom": cols.Geom,
+		"col-updated-at": cols.UpdatedAt, "col-properties": cols.Properties,
+	} {
 		if !tableNameRe.MatchString(name) {
-			log.Fatalf("datum-server: invalid -%s value %q (only [a-zA-Z_][a-zA-Z0-9_]*)", label, name)
+			log.Fatalf("datum-server: invalid %s value %q (only [a-zA-Z_][a-zA-Z0-9_]*)", label, name)
 		}
 	}
 
@@ -64,12 +89,12 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := runMigration(ctx, pool, *table, cols); err != nil {
+	if err := runMigration(ctx, pool, table, cols); err != nil {
 		log.Fatalf("datum-server: migration failed: %v", err)
 	}
-	log.Printf("datum-server: migration applied to table %q", *table)
+	log.Printf("datum-server: migration applied to table %q", table)
 
-	srv := newServer(pool, *table, *port, *allowedOrigin, writeLimit, cols)
-	log.Printf("datum-server: listening on :%s", *port)
+	srv := newServer(pool, table, port, allowedOrigin, writeLimit, cols)
+	log.Printf("datum-server: listening on :%s", port)
 	log.Fatal(srv.run(ctx))
 }

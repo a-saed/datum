@@ -175,46 +175,53 @@ function FeatureList() {
 
 ## datum-server (Go binary)
 
-### Flags
+### Config file
+
+The recommended way to configure datum-server is a `datum.yaml` file:
+
+```yaml
+port: 3000
+allowed_origin: "https://myapp.com"
+rate_limit: 0  # writes per minute per IP, 0 = disabled
+
+table:
+  name: sites
+  col_id: site_id           # default: id
+  col_geom: location        # default: geom
+  col_updated_at: modified_at  # default: updated_at
+  col_properties: attrs     # default: properties
+```
+
+Run with:
+
+```bash
+datum-server -config datum.yaml -db $DATABASE_URL
+```
+
+The `-db` flag (or `DATABASE_URL` env var) is always required and is intentionally kept out of the config file to avoid committing credentials.
+
+### Flags and env vars
+
+All settings can also be passed as flags or env vars — useful for deployment overrides. **Precedence: flag > env var > config file > default.**
 
 | Flag | Env var | Default | Description |
 |---|---|---|---|
+| `-config` | `CONFIG` | — | Path to `datum.yaml` |
 | `-db` | `DATABASE_URL` | — | PostgreSQL connection URL **(required)** |
-| `-table` | `TABLE` | — | Table name to sync **(required)** |
+| `-table` | `TABLE` | — | Table name (overrides config file) |
 | `-port` | `PORT` | `3000` | Port to listen on |
-| `-allowed-origin` | `ALLOWED_ORIGIN` | `*` | Allowed WebSocket `Origin` header. Set to your app's domain in production. `*` allows all origins (dev only). |
-| `-rate-limit` | `RATE_LIMIT` | `0` | Max write messages per minute per IP. `0` = disabled. |
-| `-col-id` | `COL_ID` | `id` | UUID primary key column name |
-| `-col-geom` | `COL_GEOM` | `geom` | PostGIS geometry column name |
-| `-col-updated-at` | `COL_UPDATED_AT` | `updated_at` | Last-modified timestamp column name |
-| `-col-properties` | `COL_PROPERTIES` | `properties` | JSONB properties column name |
-
-**Example — existing table with custom column names:**
-```bash
-datum-server \
-  -db "postgres://user:pass@host/mydb" \
-  -table sites \
-  -col-id site_id \
-  -col-geom location \
-  -col-updated-at modified_at \
-  -col-properties attrs \
-  -allowed-origin "https://myapp.com"
-```
-
-**Example — greenfield (default column names):**
-```bash
-datum-server \
-  -db "postgres://user:pass@host/mydb" \
-  -table features \
-  -allowed-origin "https://myapp.com"
-```
+| `-allowed-origin` | `ALLOWED_ORIGIN` | `*` | Allowed WebSocket `Origin` header. `*` allows all origins (dev only). |
+| `-rate-limit` | `RATE_LIMIT` | `0` | Max writes/min per IP. `0` = disabled. |
+| `-col-id` | `COL_ID` | `id` | UUID primary key column |
+| `-col-geom` | `COL_GEOM` | `geom` | PostGIS geometry column |
+| `-col-updated-at` | `COL_UPDATED_AT` | `updated_at` | Last-modified timestamp column |
+| `-col-properties` | `COL_PROPERTIES` | `properties` | JSONB properties column |
 
 **Example (Docker):**
 ```bash
 docker run ghcr.io/a-saed/datum-server \
-  -db "postgres://user:pass@host/mydb" \
-  -table features \
-  -allowed-origin "https://myapp.com"
+  -config /etc/datum/datum.yaml \
+  -db $DATABASE_URL
 ```
 
 ---
