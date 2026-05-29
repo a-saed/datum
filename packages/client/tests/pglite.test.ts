@@ -139,6 +139,20 @@ describe('setupSchema', () => {
     expect(rows[0].count).toBe(0)
   })
 
+  it('wipes when schema_hash mismatches (version correct)', async () => {
+    const db = new PGlite({ extensions: { postgis } })
+    await db.exec('CREATE EXTENSION IF NOT EXISTS postgis')
+    // First setup to establish a baseline
+    await setupSchema(db, 'features', DEFAULT_COLUMNS)
+    // Corrupt the hash (keep version correct)
+    await db.query(
+      `UPDATE _datum_meta SET value = 'badhash' WHERE key = 'schema_hash'`
+    )
+    // Should wipe and recreate
+    const wiped = await setupSchema(db, 'features', DEFAULT_COLUMNS)
+    expect(wiped).toBe(true)
+  })
+
   it('sets schema_version in _datum_meta', async () => {
     const d = await makeDb()
     await setupSchema(d, 'features', DEFAULT_COLUMNS)

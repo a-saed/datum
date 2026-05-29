@@ -58,7 +58,7 @@ export async function setupSchema(db: PGlite, tableName: string, columns: Column
   // Wipe and recreate.
   await db.exec(`
     DROP TABLE IF EXISTS _datum_outbox;
-    DROP TABLE IF EXISTS ${tableName};
+    DROP TABLE IF EXISTS ${quote(tableName)};
     DROP FUNCTION IF EXISTS _datum_capture_change CASCADE;
     DELETE FROM _datum_meta;
   `)
@@ -79,9 +79,9 @@ export async function setupSchema(db: PGlite, tableName: string, columns: Column
 
   await db.exec(buildTriggerFunction(tableName, columns))
   await db.exec(`
-    DROP TRIGGER IF EXISTS datum_capture_changes ON ${tableName};
+    DROP TRIGGER IF EXISTS datum_capture_changes ON ${quote(tableName)};
     CREATE TRIGGER datum_capture_changes
-    AFTER INSERT OR UPDATE OR DELETE ON ${tableName}
+    AFTER INSERT OR UPDATE OR DELETE ON ${quote(tableName)}
     FOR EACH ROW EXECUTE FUNCTION _datum_capture_change()
   `)
 
@@ -108,7 +108,7 @@ function buildCreateTable(tableName: string, columns: ColumnDef[]): string {
                     col.role === 'updated_at'  ? ' DEFAULT now()' : ''
     return `  ${quote(col.name)} ${type}${pk}${notnull}${def}`
   })
-  return `CREATE TABLE ${tableName} (\n${defs.join(',\n')}\n)`
+  return `CREATE TABLE ${quote(tableName)} (\n${defs.join(',\n')}\n)`
 }
 
 function buildTriggerFunction(tableName: string, columns: ColumnDef[]): string {
@@ -119,8 +119,8 @@ function buildTriggerFunction(tableName: string, columns: ColumnDef[]): string {
 
   const pairs = cols.map(col =>
     col.role === 'geom'
-      ? `'${col.name}', ST_AsGeoJSON(NEW.${quote(col.name)})`
-      : `'${col.name}', NEW.${quote(col.name)}`
+      ? `'${col.name.replace(/'/g, "''")}', ST_AsGeoJSON(NEW.${quote(col.name)})`
+      : `'${col.name.replace(/'/g, "''")}', NEW.${quote(col.name)}`
   ).join(',\n            ')
 
   return `
