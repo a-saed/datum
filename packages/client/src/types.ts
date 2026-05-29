@@ -64,6 +64,22 @@ export interface DatumConfig {
    * and `'disconnected'` when the WebSocket drops unexpectedly.
    */
   onStatusChange?: (status: ConnectionStatus) => void
+  /**
+   * JWT token for server authentication. Required when datum-server is
+   * configured with an `auth:` block.
+   *
+   * Pass a function to enable automatic token refresh — datum calls it
+   * before the current token expires and sends the fresh token without
+   * reconnecting.
+   *
+   * @example
+   * // Static token
+   * token: 'eyJ...'
+   *
+   * // Auto-refresh (recommended for production)
+   * token: () => yourAuth.getValidToken()
+   */
+  token?: string | (() => Promise<string>)
 }
 
 /** A spatial feature as returned by the server snapshot or delta. */
@@ -86,6 +102,12 @@ export interface SubscribeMessage {
   client_id: string
   table?: string // omit for single-table configs
   since?: string // ISO-8601; omitted on first visit (server returns full snapshot)
+  token?: string
+}
+
+export interface AuthMessage {
+  type: 'auth'
+  token: string
 }
 
 export interface WriteMessage {
@@ -112,4 +134,4 @@ export interface AckMessage {
 }
 
 export type ServerMessage = SnapshotMessage | DeltaMessage | AckMessage
-export type ClientMessage = SubscribeMessage | WriteMessage
+export type ClientMessage = SubscribeMessage | WriteMessage | AuthMessage

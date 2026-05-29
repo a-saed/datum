@@ -56,6 +56,7 @@ export class DatumClient {
   private isDisconnecting = false
   private resolveReady: (() => void) | null = null
   private inFlight = new Set<string>()
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
   private static readonly TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
@@ -180,6 +181,7 @@ export class DatumClient {
     this.isDisconnecting = true
     if (this.syncTimer) clearInterval(this.syncTimer)
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
     this.ws.close()
   }
 
@@ -201,6 +203,7 @@ export class DatumClient {
 
   private async onWsOpen(): Promise<void> {
     this.reconnectAttempt = 0
+    const token = await this.resolveToken()
     if (this.needsSnapshot) {
       // First visit (or reconnect before snapshot arrived): request full snapshot.
       sendMessage(this.ws, {
@@ -208,11 +211,13 @@ export class DatumClient {
         bbox: this.config.bbox,
         client_id: this.clientId,
         ...(this.config.table ? { table: this.config.table } : {}),
+        ...(token ? { token } : {}),
       })
+      if (token) this.scheduleTokenRefresh(token)
       // resolveReady is called after the snapshot is loaded (in handleMessage).
     } else {
       // Returning visit or reconnect: catch up on changes since last sync.
-      await this.sendSubscribeWithSince()
+      await this.sendSubscribeWithSince(token)
       this.setStatus('connected')
       this.resolveReady?.()
       this.resolveReady = null
@@ -300,7 +305,7 @@ export class DatumClient {
     }
   }
 
-  private async sendSubscribeWithSince(): Promise<void> {
+  private async sendSubscribeWithSince(token?: string): Promise<void> {
     const { rows } = await this.db.query<{ since: string }>(
       `SELECT COALESCE(
          to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
@@ -313,7 +318,42 @@ export class DatumClient {
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       since: rows[0].since,
+      ...(token ? { token } : {}),
     })
+    if (token) this.scheduleTokenRefresh(token)
+  }
+
+  private async resolveToken(): Promise<string | undefined> {
+    const t = this.config.token
+    if (!t) return undefined
+    return typeof t === 'function' ? await t() : t
+  }
+
+  private static getTokenExpiry(token: string): number | null {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+      return typeof payload.exp === 'number' ? payload.exp : null
+    } catch {
+      return null
+    }
+  }
+
+  private scheduleTokenRefresh(token: string): void {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    if (typeof this.config.token !== 'function') return // static tokens can't be refreshed
+    const exp = DatumClient.getTokenExpiry(token)
+    if (!exp) return
+    const msUntilRefresh = (exp * 1000) - Date.now() - 60_000 // 60s before expiry
+    if (msUntilRefresh <= 0) return
+    this.refreshTimer = setTimeout(() => { void this.sendTokenRefresh() }, msUntilRefresh)
+  }
+
+  private async sendTokenRefresh(): Promise<void> {
+    if (this.ws.readyState !== WebSocket.OPEN) return
+    const token = await this.resolveToken()
+    if (!token) return
+    sendMessage(this.ws, { type: 'auth', token })
+    this.scheduleTokenRefresh(token)
   }
 
   private startSyncCycle(): void {
