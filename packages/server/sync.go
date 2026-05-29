@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,24 +19,35 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 		}
 	}
 
-	cols  := ts.cols
 	table := pgx.Identifier{ts.name}.Sanitize()
-	id    := pgx.Identifier{cols.ID}.Sanitize()
-	geom  := pgx.Identifier{cols.Geom}.Sanitize()
-	props := pgx.Identifier{cols.Properties}.Sanitize()
-	upd   := pgx.Identifier{cols.UpdatedAt}.Sanitize()
+	bbox  := client.bbox
 
-	// Alias each column to its canonical name so pgx.RowToMap uses the right keys.
+	// Build SELECT list from introspected columns.
+	var selects []string
+	var geomCol, updCol string
+	for _, c := range ts.columns {
+		q := pgx.Identifier{c.Name}.Sanitize()
+		switch c.Role {
+		case "id", "updated_at":
+			selects = append(selects, fmt.Sprintf("%s::text AS %s", q, q))
+			if c.Role == "updated_at" {
+				updCol = q
+			}
+		case "geom":
+			selects = append(selects, fmt.Sprintf("ST_AsGeoJSON(%s)::text AS %s", q, q))
+			geomCol = q
+		default:
+			selects = append(selects, fmt.Sprintf("%s AS %s", q, q))
+		}
+	}
+
 	query := fmt.Sprintf(
-		`SELECT %s::text AS %s, ST_AsGeoJSON(%s)::text AS %s, %s AS %s, %s::text AS %s
-		 FROM %s
+		`SELECT %s FROM %s
 		 WHERE ST_Intersects(%s, ST_MakeEnvelope($1, $2, $3, $4, 4326))
 		 AND %s > $5`,
-		id, id, geom, geom, props, props, upd, upd,
-		table, geom, upd,
+		strings.Join(selects, ", "),
+		table, geomCol, updCol,
 	)
-
-	bbox := client.bbox
 
 	// Use a transaction so SET LOCAL session vars apply to the snapshot query.
 	tx, err := s.pool.Begin(ctx)

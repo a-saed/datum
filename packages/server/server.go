@@ -247,6 +247,9 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				log.Printf("datum-server: client %s: unknown table %q", msg.ClientID, msg.Table)
 				continue
 			}
+
+			isFirstSubscribe := client.table == ""
+
 			// Remove from old table if the client is switching tables.
 			if client.table != "" && client.table != ts.name {
 				if old := s.tables[client.table]; old != nil {
@@ -257,6 +260,15 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			client.table = ts.name
 			client.bbox  = msg.BBox
 			ts.addClient(client)
+
+			// Send schema once per connection — not on bbox updates (setBbox).
+			if isFirstSubscribe {
+				select {
+				case client.send <- ts.schemaMsg:
+				default:
+					log.Printf("datum-server: client %s schema send buffer full", client.id)
+				}
+			}
 
 			if err := sendSnapshot(r.Context(), s, ts, client, msg.Since); err != nil {
 				log.Printf("datum-server: snapshot error for %s: %v", client.id, err)
