@@ -165,12 +165,19 @@ export class DatumClient {
    */
   setBbox(bbox: [number, number, number, number]): void {
     this.config.bbox = bbox
+    void this.sendBboxSubscribe(bbox)
+  }
+
+  private async sendBboxSubscribe(bbox: [number, number, number, number]): Promise<void> {
+    const token = await this.resolveToken()
     sendMessage(this.ws, {
       type: 'subscribe',
       bbox,
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
+      ...(token ? { token } : {}),
     })
+    if (token) this.scheduleTokenRefresh(token)
   }
 
   /**
@@ -349,6 +356,7 @@ export class DatumClient {
   }
 
   private async sendTokenRefresh(): Promise<void> {
+    this.refreshTimer = null
     if (this.ws.readyState !== WebSocket.OPEN) return
     const token = await this.resolveToken()
     if (!token) return
