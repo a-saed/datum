@@ -318,7 +318,7 @@ export class DatumClient {
       `SELECT COALESCE(
          to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
          '1970-01-01T00:00:00.000Z'
-       ) AS since FROM ${this.tableName}`
+       ) AS since FROM "${this.tableName}"`
     )
     sendMessage(this.ws, {
       type: 'subscribe',

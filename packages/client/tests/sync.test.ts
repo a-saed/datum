@@ -112,6 +112,35 @@ describe('applyDelta', () => {
     )
     expect(String(res.rows[0].count)).toBe('0')
   })
+
+  it('round-trips a float8 data column through applyDelta', async () => {
+    const cols: ColumnDef[] = [
+      ...DEFAULT_COLUMNS,
+      { name: 'height', pg_type: 'float8', role: 'data', nullable: true },
+    ]
+    // setupSchema with extended columns to create the table
+    await setupSchema(db, 'features', cols)
+
+    const delta: DeltaMessage = {
+      type: 'delta',
+      op: 'insert',
+      feature: {
+        id: '00000000-0000-0000-0000-000000000001',
+        geom: '{"type":"Point","coordinates":[10,20]}',
+        updated_at: new Date().toISOString(),
+        properties: {},
+        height: 42.5,
+      } as any,
+      origin_client_id: 'server',
+    }
+
+    await applyDelta(db, delta, 'features', cols)
+
+    const result = await db.query<{ height: number }>(
+      `SELECT height FROM features WHERE id = '00000000-0000-0000-0000-000000000001'`
+    )
+    expect(result.rows[0].height).toBe(42.5)
+  })
 })
 
 const sinceQuery = `SELECT COALESCE(

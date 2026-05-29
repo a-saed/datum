@@ -18,6 +18,7 @@ export interface ChangeEvent {
   op:         ChangeOp
   feature_id: string
   data:       Record<string, unknown> | null
+  /** @deprecated since v0.7.0 — server reads updated_at from data map */
   updated_at: string
 }
 
