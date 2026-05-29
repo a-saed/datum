@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -144,7 +145,27 @@ func main() {
 		if err := runMigration(ctx, pool, ts.name, ts.cols); err != nil {
 			log.Fatalf("datum-server: migration failed for table %q: %v", ts.name, err)
 		}
-		log.Printf("datum-server: migration applied to table %q", ts.name)
+
+		columns, err := introspectSchema(ctx, pool, ts.name, ts.cols)
+		if err != nil {
+			log.Fatalf("datum-server: introspect schema for table %q: %v", ts.name, err)
+		}
+		if err := validateColumns(ts.name, columns); err != nil {
+			log.Fatalf("%v", err)
+		}
+
+		if err := installTrigger(ctx, pool, ts.name, columns); err != nil {
+			log.Fatalf("datum-server: install trigger for table %q: %v", ts.name, err)
+		}
+
+		schemaMsg, err := json.Marshal(SchemaMessage{Type: "schema", Columns: columns})
+		if err != nil {
+			log.Fatalf("datum-server: serialise schema for table %q: %v", ts.name, err)
+		}
+
+		ts.columns = columns
+		ts.schemaMsg = schemaMsg
+		log.Printf("datum-server: table %q ready (%d columns)", ts.name, len(columns))
 	}
 
 	srv := newServer(pool, tables, port, allowedOrigin, writeLimit, verifier)
