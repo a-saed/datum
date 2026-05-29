@@ -249,6 +249,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 					websocket.FormatCloseMessage(4401, "unauthorized"),
 					time.Now().Add(time.Second),
 				)
+				close(client.send)
 				return
 			}
 			client.claims = claims
@@ -315,6 +316,12 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 					websocket.FormatCloseMessage(4401, "token refresh failed"),
 					time.Now().Add(time.Second),
 				)
+				if client.table != "" {
+					if ts := s.tables[client.table]; ts != nil {
+						ts.removeClient(client.id)
+					}
+				}
+				close(client.send)
 				return
 			}
 			client.claims = claims
