@@ -33,6 +33,7 @@ const db = await DatumClient.connect({
 | `dbName` | `string` | `table` or `"datum"` | IndexedDB database name. Defaults to `table` when set, so each table gets its own database automatically. Override when you need explicit control. |
 | `connectTimeout` | `number` (ms) | `30000` | How long to wait for the initial snapshot before rejecting `connect()`. Set to `0` to disable. |
 | `onStatusChange` | `(status: ConnectionStatus) => void` | — | Called whenever the connection transitions between `'connecting'`, `'connected'`, and `'disconnected'`. |
+| `token` | `string \| () => Promise<string>` | — | JWT for server authentication. Pass a function for automatic refresh before expiry. Required when datum-server has an `auth:` config block. |
 
 ---
 
@@ -335,6 +336,8 @@ datum-server speaks JSON over WebSocket at `/ws`.
 
 `since` is an ISO-8601 timestamp. Omit it (or set it to the epoch) to receive the full snapshot. On returning visits, datum automatically sets this to `MAX(updated_at)` from the local database so the server only returns changed features.
 
+`token` — JWT token. Required when the server has `auth:` configured. Omit when auth is not configured.
+
 **Write** — push local edits to the server:
 ```json
 {
@@ -357,6 +360,13 @@ datum-server speaks JSON over WebSocket at `/ws`.
 ```
 
 `op` is one of `"insert"`, `"update"`, `"delete"`. `table` follows the same rule as subscribe — omit for single-table setups. Batches are limited to 500 edits.
+
+**Auth** — sent by the client to refresh the token mid-connection. datum sends this automatically before the token expires (60 s before the JWT `exp` claim):
+```json
+{ "type": "auth", "token": "eyJ..." }
+```
+
+Server closes with code 4401 if the token is missing, invalid, or expired. The client's `token` function is called automatically to refresh before this happens.
 
 ### Server → Client
 

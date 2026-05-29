@@ -5,14 +5,17 @@
 ### Typed column support
 datum supports custom column names via `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml`. However the `properties` column must still be a single `JSONB` bag. Users with typed columns (`name TEXT`, `height FLOAT`, etc.) need typed column support so datum can map individual columns into the properties object automatically.
 
-### Per-user authentication
-Any client that can reach the WebSocket endpoint can read and write all data. Proper per-user auth (JWT / row-level security) is needed before datum is safe for multi-tenant apps. The `allowed_origin` config option limits browser origins but is not a substitute for user-level access control.
-
 ---
 
 ## Medium priority
 
 
+
+### Webhook auth mode
+`auth.mode: webhook` — datum calls your app's endpoint to verify opaque tokens (session cookies, API keys) or perform real-time revocation checks. Config key `auth.webhook_url` reserved. JWT mode covers most cases.
+
+### Per-delta RLS check (`broadcast_rls_check`)
+Before pushing a delta to a client, datum runs a `SELECT 1` filtered through that client's RLS. Drops the delta if RLS blocks it — correct per-row visibility at the cost of one DB query per delta per recipient. Config key `auth.broadcast_rls_check: true` reserved.
 
 ### Subscription predicates beyond bbox
 bbox is the only subscription filter today. Some use cases need arbitrary predicates — sync all features of type "building", sync features belonging to a project, etc. A WHERE clause on the subscribe message would cover most cases.
@@ -24,6 +27,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Per-user authentication (v0.6.0)** — JWT auth (HS256/RS256/ES256). Token in `subscribe` message, all claims forwarded as `datum.<key>` Postgres session variables for RLS. Auto token refresh before expiry. Startup warning when connected as superuser. Fully opt-in.
 - **Security and correctness hardening (0.5.0)** — Ack-based write sync (server acks writes before client marks synced; retries on reconnect). WS per-connection read limits, read deadlines, ping/pong keepalive. Write batch capped at 500. Rate limiter uses real client IP (X-Forwarded-For aware). Delta broadcast uses full geometry bbox (not just first vertex) for correct routing of polygons and lines. Graceful shutdown on SIGTERM. Outbox ordered by insertion seq not feature timestamp.
 - **Pending writes visibility** — `client.pendingCount` getter and `client.onPendingChange(cb)` subscription expose the outbox backlog in real time. Fires after every local write and after every sync flush.
 - **Connection status + auto-reconnect** — `connectionStatus` getter and `onStatusChange` callback expose `'connecting' | 'connected' | 'disconnected'`. Client auto-reconnects with exponential backoff (1 s → 30 s cap) when the WebSocket drops. `connectTimeout` (default 30 s) rejects `connect()` if the initial snapshot never arrives.
