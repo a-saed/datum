@@ -36,13 +36,16 @@ const db = await DatumClient.connect({
   bbox: [-122.5, 37.7, -122.4, 37.8],
 })
 
-// Full PostGIS — runs locally in WASM, no network
+// With typed columns (new in v0.7.0): direct column access
 const result = await db.query<{ name: string; area: number }>(`
-  SELECT properties->>'name' AS name,
+  SELECT name,
          ST_Area(geom::geography) AS area
   FROM features
   WHERE ST_Area(geom::geography) > 1000
 `)
+
+// With JSONB properties bag (still supported):
+// SELECT properties->>'name' AS name FROM features
 
 // Writes are captured automatically and synced in the background
 await db.query(

@@ -437,7 +437,8 @@ datum-server creates the table if it does not exist. If you are bringing an **ex
 | Last-modified timestamp | `updated_at` | `col_updated_at` |
 
 - **geometry** — any PostGIS geometry type in EPSG:4326. Points, lines, and polygons all work.
-- **properties** — free-form JSONB for any additional attributes. Must be a single `JSONB` column today — typed columns (`name TEXT`, `height FLOAT`) are on the roadmap.
+- **properties** — optional free-form JSONB for additional attributes. If present, it coexists with typed columns.
+- **typed columns** — any additional columns (`name TEXT`, `height FLOAT8`, `score INT`, etc.) are automatically synced. datum introspects the table at startup and mirrors the exact schema in PGlite. Users query typed columns with normal SQL on both sides.
 - **updated_at** — last-write-wins conflict resolution is based on this column. Always set it to `now()` on insert/update.
 
 datum-server installs a spatial index on the geometry column and attaches the `datum_notify_change` trigger to the table.
