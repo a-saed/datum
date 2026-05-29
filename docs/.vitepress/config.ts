@@ -18,6 +18,7 @@ export default defineConfig({
       { text: 'Getting Started', link: '/getting-started' },
       { text: 'How It Works', link: '/how-it-works' },
       { text: 'API Reference', link: '/api' },
+      { text: 'Authentication', link: '/auth' },
       { text: 'Self-Hosting', link: '/self-hosting' },
     ],
     socialLinks: [
