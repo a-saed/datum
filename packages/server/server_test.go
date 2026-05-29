@@ -102,20 +102,19 @@ func TestResolveTable(t *testing.T) {
 	}
 }
 
-func TestAuthEnforced_MissingToken(t *testing.T) {
+func TestVerifyToken_MissingToken(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret-that-is-long-enough-x")
 	v, err := newVerifier(AuthConfig{JWTAlgorithm: "HS256"})
 	if err != nil {
 		t.Fatalf("newVerifier: %v", err)
 	}
-
-	err = enforceAuth(v, "")
+	_, err = verifyToken(v, "")
 	if err == nil {
 		t.Fatal("expected error when token is missing and auth is configured")
 	}
 }
 
-func TestAuthEnforced_ValidToken(t *testing.T) {
+func TestVerifyToken_ValidToken(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret-that-is-long-enough-x")
 	v, err := newVerifier(AuthConfig{JWTAlgorithm: "HS256"})
 	if err != nil {
@@ -125,14 +124,21 @@ func TestAuthEnforced_ValidToken(t *testing.T) {
 		map[string]any{"sub": "user-1"},
 		time.Now().Add(time.Hour),
 	)
-	if err := enforceAuth(v, tok); err != nil {
+	claims, err := verifyToken(v, tok)
+	if err != nil {
 		t.Fatalf("unexpected error for valid token: %v", err)
+	}
+	if claims["sub"] != "user-1" {
+		t.Errorf("sub: got %v, want user-1", claims["sub"])
 	}
 }
 
-func TestAuthEnforced_NoAuth(t *testing.T) {
-	// nil verifier = unauthenticated mode, any (or no) token is fine
-	if err := enforceAuth(nil, ""); err != nil {
+func TestVerifyToken_NoAuth(t *testing.T) {
+	claims, err := verifyToken(nil, "")
+	if err != nil {
 		t.Fatalf("unexpected error in unauthenticated mode: %v", err)
+	}
+	if claims != nil {
+		t.Fatalf("expected nil claims in unauthenticated mode")
 	}
 }

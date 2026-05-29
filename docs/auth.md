@@ -95,6 +95,7 @@ If `token` is a function, datum reads the `exp` claim from the JWT and automatic
 - **`jwt_secret` via env var only.** Never put secrets in `datum.yaml` — it gets committed to git.
 - **Public keys are safe in config.** A public key can only verify tokens, not create them.
 - **Non-superuser role required.** Superusers bypass RLS silently.
+- **Static tokens don't expire mid-connection.** If `token` is a plain string, datum cannot refresh it — the token is verified once at connect time and reused for the lifetime of the connection. Use `token: () => yourAuth.getValidToken()` in production so datum can refresh automatically before expiry.
 
 ## Known limitation: delta broadcast
 

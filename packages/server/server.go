@@ -165,19 +165,6 @@ func (s *server) run(ctx context.Context) error {
 	}
 }
 
-// enforceAuth verifies the token when a verifier is configured.
-// Returns nil when auth is disabled (verifier == nil).
-func enforceAuth(v Verifier, token string) error {
-	if v == nil {
-		return nil
-	}
-	if token == "" {
-		return errors.New("auth required")
-	}
-	_, err := v.Verify(token)
-	return err
-}
-
 // verifyToken verifies the token and returns its claims.
 // Returns nil claims (not an error) when auth is disabled.
 func verifyToken(v Verifier, token string) (map[string]any, error) {

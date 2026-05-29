@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -94,13 +95,43 @@ func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string
 // session variable. No-op when claims is nil or empty.
 func setSessionClaims(ctx context.Context, tx pgx.Tx, claims map[string]any) error {
 	for key, val := range claims {
+		str, err := claimToString(val)
+		if err != nil {
+			return fmt.Errorf("set claim %s: %w", key, err)
+		}
 		if _, err := tx.Exec(ctx,
 			`SELECT set_config($1, $2, true)`,
 			"datum."+key,
-			fmt.Sprintf("%v", val),
+			str,
 		); err != nil {
 			return fmt.Errorf("set claim %s: %w", key, err)
 		}
 	}
 	return nil
+}
+
+// claimToString converts a JWT claim value to a string suitable for Postgres set_config.
+// Strings are passed through. Numbers are formatted without scientific notation.
+// Booleans become "true"/"false". Arrays and objects are JSON-encoded.
+func claimToString(v any) (string, error) {
+	switch c := v.(type) {
+	case string:
+		return c, nil
+	case float64:
+		// JSON numbers arrive as float64. Preserve integer semantics when the
+		// value has no fractional part so Postgres can cast to bigint/int.
+		if c == float64(int64(c)) {
+			return strconv.FormatInt(int64(c), 10), nil
+		}
+		return strconv.FormatFloat(c, 'f', -1, 64), nil
+	case bool:
+		return strconv.FormatBool(c), nil
+	default:
+		// Arrays, objects, and other types → JSON so Postgres can cast to jsonb.
+		b, err := json.Marshal(c)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
 }
