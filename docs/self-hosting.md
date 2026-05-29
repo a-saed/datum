@@ -44,6 +44,33 @@ docker run \
 
 datum-server needs outbound access to Postgres and inbound WebSocket access from your clients. It has no disk state — restarts are safe.
 
+## Authentication
+
+JWT authentication is opt-in. Add an `auth:` block to `datum.yaml` and set `JWT_SECRET` as an environment secret:
+
+```yaml
+# datum.yaml
+auth:
+  jwt_algorithm: "HS256"
+```
+
+```bash
+# Pass the secret as an env var — never put it in datum.yaml
+JWT_SECRET=your-secret datum-server -config datum.yaml -db $DATABASE_URL
+```
+
+For RS256/ES256, use `jwt_public_key` (safe to commit — public keys can only verify, not sign):
+
+```yaml
+auth:
+  jwt_algorithm: "RS256"
+  jwt_public_key: "/run/secrets/jwt.pub"
+```
+
+For RLS to take effect, `DATABASE_URL` must point to a **non-superuser** Postgres role. datum-server logs a warning on startup if it detects a superuser connection.
+
+See [Authentication](/auth) for the full setup guide including Postgres role configuration and RLS policy examples.
+
 ## CORS
 
 `ALLOWED_ORIGIN` controls which browser origins are allowed to open a WebSocket connection. Set it to your app's exact origin (scheme + host + port):

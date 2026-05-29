@@ -22,6 +22,8 @@ features:
     details: Declare a bounding box on connect. Only features that intersect your viewport are synced. Scales to large datasets with no extra config.
   - title: Fast reconnect
     details: PGlite persists to IndexedDB. Returning visits resolve in ~200ms with local data already queryable while delta catch-up runs in the background.
+  - title: Per-user auth + RLS
+    details: Pass a JWT on connect. datum forwards all claims as Postgres session variables so your Row Level Security policies filter data per user — no code changes needed.
 ---
 
 ## What it looks like

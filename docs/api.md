@@ -237,6 +237,12 @@ table:
   col_geom: location        # default: geom
   col_updated_at: modified_at  # default: updated_at
   col_properties: attrs     # default: properties
+
+# Optional — JWT authentication
+auth:
+  jwt_algorithm: "HS256"    # HS256 | RS256 | ES256 (and 384/512 variants)
+  # jwt_secret comes from JWT_SECRET env var — never written here
+  # jwt_public_key: "/run/secrets/jwt.pub"  # RS256/ES256 only
 ```
 
 **Multiple tables:**
@@ -303,6 +309,7 @@ All config file fields can be overridden via env vars — useful for Docker and 
 | `COL_GEOM` | `table.col_geom` | `geom` |
 | `COL_UPDATED_AT` | `table.col_updated_at` | `updated_at` |
 | `COL_PROPERTIES` | `table.col_properties` | `properties` |
+| `JWT_SECRET` | — (env only) | — |
 
 **Example (Docker with env vars):**
 ```bash

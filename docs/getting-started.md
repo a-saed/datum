@@ -95,4 +95,5 @@ const { rows } = useDatum(db, `SELECT * FROM features`)
 
 - [How It Works](/how-it-works) — understand the local-first model, bbox subscriptions, and sync cycle
 - [API Reference](/api) — full TypeScript client, React hooks, and server documentation
+- [Authentication](/auth) — add per-user JWT auth and Postgres Row Level Security
 - [Self-Hosting](/self-hosting) — deploy to production (free-tier guide included)
