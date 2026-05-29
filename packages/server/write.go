@@ -45,6 +45,12 @@ func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string
 		})
 	}
 
+	if len(writeCols) == 0 {
+		return nil, fmt.Errorf("table %q: no writable columns (only id column found)", ts.name)
+	}
+
+	// updQuoted is set inside the loop below — guard here rather than after.
+
 	// INSERT column list: id first, then write cols.
 	insertCols := make([]string, 0, len(writeCols)+1)
 	insertCols = append(insertCols, idCol)
@@ -80,6 +86,10 @@ func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string
 			updQuoted = wc.quoted
 			break
 		}
+	}
+
+	if updQuoted == "" {
+		return nil, fmt.Errorf("table %q: no updated_at column found", ts.name)
 	}
 
 	upsertSQL := fmt.Sprintf(`
