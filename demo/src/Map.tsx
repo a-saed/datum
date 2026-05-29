@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import type { FeatureCollection } from 'geojson'
+import type { FeatureCollection, Point } from 'geojson'
 import { DatumClient } from 'datum-sync'
 import { useDatum } from 'datum-sync/react'
 import type { AppStatus } from './App.js'
@@ -34,6 +34,7 @@ function EyeIcon({ open }: { open: boolean }) {
 export function Map({ onStatusChange }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
+  const hoverPopupRef = useRef<maplibregl.Popup | null>(null)
   const featuresClientRef = useRef<DatumClient | null>(null)
   const waypointsClientRef = useRef<DatumClient | null>(null)
   const [featuresClient, setFeaturesClient] = useState<DatumClient | null>(null)
@@ -87,6 +88,49 @@ export function Map({ onStatusChange }: Props) {
             'circle-stroke-width': 2,
             'circle-stroke-color': '#fff',
           },
+        })
+      }
+
+      for (const layer of LAYERS) {
+        map.on('mouseenter', `${layer.id}-layer`, (e) => {
+          map.getCanvas().style.cursor = 'pointer'
+          const feature = e.features?.[0]
+          if (!feature) return
+
+          const props = feature.properties as Record<string, string>
+          const name = props.name || '(unnamed)'
+
+          let extraLine = ''
+          if (layer.id === 'features' && props.note) {
+            extraLine = `<div style="color:#666;font-size:12px;margin-top:3px">${props.note}</div>`
+          } else if (layer.id === 'waypoints' && props.type) {
+            extraLine = `<div style="color:#666;font-size:12px;margin-top:3px;text-transform:capitalize">${props.type}</div>`
+          }
+
+          const html = `
+            <div style="font-family:system-ui,sans-serif;padding:6px 2px;min-width:120px">
+              <div style="font-weight:600;font-size:13px;color:#111">${name}</div>
+              ${extraLine}
+              <div style="font-size:11px;color:#aaa;margin-top:4px">${layer.label}</div>
+            </div>
+          `
+
+          const coords = (feature.geometry as Point).coordinates as [number, number]
+          hoverPopupRef.current?.remove()
+          hoverPopupRef.current = new maplibregl.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 12,
+          })
+            .setLngLat(coords)
+            .setHTML(html)
+            .addTo(map)
+        })
+
+        map.on('mouseleave', `${layer.id}-layer`, () => {
+          map.getCanvas().style.cursor = ''
+          hoverPopupRef.current?.remove()
+          hoverPopupRef.current = null
         })
       }
 
@@ -184,17 +228,28 @@ export function Map({ onStatusChange }: Props) {
 
       saveBtn.onclick = async () => {
         const name = nameInput.value.trim() || `Point ${lng.toFixed(3)},${lat.toFixed(3)}`
-        const properties: Record<string, string> = { name, ...getExtraProps() }
 
         saveBtn.disabled = true
         saveBtn.textContent = 'Saving...'
 
         try {
-          await c.query(
-            `INSERT INTO ${table} (geom, properties, updated_at)
-             VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())`,
-            [lng, lat, JSON.stringify(properties)]
-          )
+          if (table === 'features') {
+            const extraProps = getExtraProps()
+            const note = extraProps.note ?? ''
+            await c.query(
+              `INSERT INTO features (geom, name, properties, updated_at)
+               VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4::jsonb, now())`,
+              [lng, lat, name, JSON.stringify(note ? { note } : {})]
+            )
+          } else {
+            const extraProps = getExtraProps()
+            const type = extraProps.type ?? ''
+            await c.query(
+              `INSERT INTO waypoints (geom, name, type, properties, updated_at)
+               VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4, '{}', now())`,
+              [lng, lat, name, type]
+            )
+          }
           activePopup?.remove()
           activePopup = null
           onStatusChangeRef.current({ phase: 'saving', text: 'Saved — syncing…' })
@@ -228,13 +283,13 @@ export function Map({ onStatusChange }: Props) {
     }
   }, [])
 
-  const { rows: featureRows } = useDatum<{ lon: number; lat: number; name: string }>(
+  const { rows: featureRows } = useDatum<{ lon: number; lat: number; name: string | null; note: string | null }>(
     featuresClient,
-    `SELECT ST_X(geom) AS lon, ST_Y(geom) AS lat, properties->>'name' AS name FROM features`
+    `SELECT ST_X(geom) AS lon, ST_Y(geom) AS lat, name, properties->>'note' AS note FROM features`
   )
-  const { rows: waypointRows } = useDatum<{ lon: number; lat: number; name: string }>(
+  const { rows: waypointRows } = useDatum<{ lon: number; lat: number; name: string | null; type: string | null }>(
     waypointsClient,
-    `SELECT ST_X(geom) AS lon, ST_Y(geom) AS lat, properties->>'name' AS name FROM waypoints`
+    `SELECT ST_X(geom) AS lon, ST_Y(geom) AS lat, name, type FROM waypoints`
   )
 
   useEffect(() => {
@@ -245,7 +300,7 @@ export function Map({ onStatusChange }: Props) {
       features: featureRows.map(r => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
-        properties: { name: r.name },
+        properties: { name: r.name ?? '', note: r.note ?? '' },
       })),
     } as FeatureCollection)
   }, [featureRows])
@@ -258,7 +313,7 @@ export function Map({ onStatusChange }: Props) {
       features: waypointRows.map(r => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
-        properties: { name: r.name },
+        properties: { name: r.name ?? '', type: r.type ?? '' },
       })),
     } as FeatureCollection)
   }, [waypointRows])
