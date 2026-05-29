@@ -34,7 +34,19 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 	)
 
 	bbox := client.bbox
-	rows, err := s.pool.Query(ctx, query, bbox[0], bbox[1], bbox[2], bbox[3], sinceTime)
+
+	// Use a transaction so SET LOCAL session vars apply to the snapshot query.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin snapshot tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := setSessionClaims(ctx, tx, client.claims); err != nil {
+		return err
+	}
+
+	rows, err := tx.Query(ctx, query, bbox[0], bbox[1], bbox[2], bbox[3], sinceTime)
 	if err != nil {
 		return fmt.Errorf("snapshot query: %w", err)
 	}
@@ -54,6 +66,10 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 	}
 	if err := rows.Err(); err != nil {
 		return err
+	}
+	// Commit to cleanly end the transaction (rows already fully consumed).
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit snapshot tx: %w", err)
 	}
 
 	msg, err := json.Marshal(SnapshotMessage{Type: "snapshot", Features: features})
