@@ -11,6 +11,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var ErrAlgorithmMismatch = errors.New("unexpected signing method")
+
 // Verifier verifies a raw JWT string and returns its claims.
 type Verifier interface {
 	Verify(tokenStr string) (map[string]any, error)
@@ -38,7 +40,7 @@ func newVerifier(cfg AuthConfig) (Verifier, error) {
 			algorithm: alg,
 			keyFunc: func(t *jwt.Token) (any, error) {
 				if t.Method.Alg() != alg {
-					return nil, fmt.Errorf("unexpected signing method: %s", t.Method.Alg())
+					return nil, fmt.Errorf("%w: got %s", ErrAlgorithmMismatch, t.Method.Alg())
 				}
 				return []byte(secret), nil
 			},
@@ -55,7 +57,7 @@ func newVerifier(cfg AuthConfig) (Verifier, error) {
 			algorithm: alg,
 			keyFunc: func(t *jwt.Token) (any, error) {
 				if t.Method.Alg() != alg {
-					return nil, fmt.Errorf("unexpected signing method: %s", t.Method.Alg())
+					return nil, fmt.Errorf("%w: got %s", ErrAlgorithmMismatch, t.Method.Alg())
 				}
 				return pub, nil
 			},
