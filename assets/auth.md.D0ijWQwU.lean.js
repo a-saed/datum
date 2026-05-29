@@ -1,0 +1,1 @@
+import{_ as i,H as a,f as t,i as e}from"./chunks/framework.OBtFAaxf.js";const c=JSON.parse('{"title":"Authentication","description":"","frontmatter":{},"headers":[],"relativePath":"auth.md","filePath":"auth.md"}'),n={name:"auth.md"};function h(l,s,p,r,k,o){return a(),t("div",null,[...s[0]||(s[0]=[e("",32)])])}const E=i(n,[["render",h]]);export{c as __pageData,E as default};
