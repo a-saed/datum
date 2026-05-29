@@ -19,6 +19,10 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 		}
 	}
 
+	if len(ts.columns) == 0 {
+		return fmt.Errorf("sendSnapshot: tableState %q has no columns (startup bug)", ts.name)
+	}
+
 	table := pgx.Identifier{ts.name}.Sanitize()
 	bbox  := client.bbox
 
