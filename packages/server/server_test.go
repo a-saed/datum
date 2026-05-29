@@ -3,6 +3,7 @@ package main
 
 import (
 	"testing"
+	"time"
 )
 
 func TestBBoxesIntersect(t *testing.T) {
@@ -98,5 +99,40 @@ func TestResolveTable(t *testing.T) {
 	}
 	if single.resolveTable("features") != features {
 		t.Error("explicit name should still work on single-table server")
+	}
+}
+
+func TestAuthEnforced_MissingToken(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret-that-is-long-enough-x")
+	v, err := newVerifier(AuthConfig{JWTAlgorithm: "HS256"})
+	if err != nil {
+		t.Fatalf("newVerifier: %v", err)
+	}
+
+	err = enforceAuth(v, "")
+	if err == nil {
+		t.Fatal("expected error when token is missing and auth is configured")
+	}
+}
+
+func TestAuthEnforced_ValidToken(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret-that-is-long-enough-x")
+	v, err := newVerifier(AuthConfig{JWTAlgorithm: "HS256"})
+	if err != nil {
+		t.Fatalf("newVerifier: %v", err)
+	}
+	tok := makeHS256Token(t, "test-secret-that-is-long-enough-x",
+		map[string]any{"sub": "user-1"},
+		time.Now().Add(time.Hour),
+	)
+	if err := enforceAuth(v, tok); err != nil {
+		t.Fatalf("unexpected error for valid token: %v", err)
+	}
+}
+
+func TestAuthEnforced_NoAuth(t *testing.T) {
+	// nil verifier = unauthenticated mode, any (or no) token is fine
+	if err := enforceAuth(nil, ""); err != nil {
+		t.Fatalf("unexpected error in unauthenticated mode: %v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -164,6 +165,31 @@ func (s *server) run(ctx context.Context) error {
 	}
 }
 
+// enforceAuth verifies the token when a verifier is configured.
+// Returns nil when auth is disabled (verifier == nil).
+func enforceAuth(v Verifier, token string) error {
+	if v == nil {
+		return nil
+	}
+	if token == "" {
+		return errors.New("auth required")
+	}
+	_, err := v.Verify(token)
+	return err
+}
+
+// verifyToken verifies the token and returns its claims.
+// Returns nil claims (not an error) when auth is disabled.
+func verifyToken(v Verifier, token string) (map[string]any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	if token == "" {
+		return nil, errors.New("auth required: token missing")
+	}
+	return v.Verify(token)
+}
+
 func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -214,6 +240,18 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(raw, &msg); err != nil {
 				continue
 			}
+			// Verify token when auth is configured.
+			claims, err := verifyToken(s.verifier, msg.Token)
+			if err != nil {
+				log.Printf("datum-server: auth rejected for %s: %v", msg.ClientID, err)
+				_ = conn.WriteControl(
+					websocket.CloseMessage,
+					websocket.FormatCloseMessage(4401, "unauthorized"),
+					time.Now().Add(time.Second),
+				)
+				return
+			}
+			client.claims = claims
 			ts := s.resolveTable(msg.Table)
 			if ts == nil {
 				log.Printf("datum-server: client %s: unknown table %q", msg.ClientID, msg.Table)
@@ -263,6 +301,24 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+
+		case "auth":
+			var msg AuthMessage
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				continue
+			}
+			claims, err := verifyToken(s.verifier, msg.Token)
+			if err != nil {
+				log.Printf("datum-server: token refresh rejected for %s: %v", client.id, err)
+				_ = conn.WriteControl(
+					websocket.CloseMessage,
+					websocket.FormatCloseMessage(4401, "token refresh failed"),
+					time.Now().Add(time.Second),
+				)
+				return
+			}
+			client.claims = claims
+			log.Printf("datum-server: token refreshed for %s", client.id)
 		}
 	}
 }
