@@ -25,12 +25,14 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 	props := pgx.Identifier{cols.Properties}.Sanitize()
 	upd   := pgx.Identifier{cols.UpdatedAt}.Sanitize()
 
+	// Alias each column to its canonical name so pgx.RowToMap uses the right keys.
 	query := fmt.Sprintf(
-		`SELECT %s::text, ST_AsGeoJSON(%s)::text, %s, %s::text
+		`SELECT %s::text AS %s, ST_AsGeoJSON(%s)::text AS %s, %s AS %s, %s::text AS %s
 		 FROM %s
 		 WHERE ST_Intersects(%s, ST_MakeEnvelope($1, $2, $3, $4, 4326))
 		 AND %s > $5`,
-		id, geom, props, upd, table, geom, upd,
+		id, id, geom, geom, props, props, upd, upd,
+		table, geom, upd,
 	)
 
 	bbox := client.bbox
@@ -50,26 +52,17 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 	if err != nil {
 		return fmt.Errorf("snapshot query: %w", err)
 	}
-	defer rows.Close()
 
-	features := make([]Feature, 0, 64)
-	for rows.Next() {
-		var f Feature
-		var rawProps []byte
-		if err := rows.Scan(&f.ID, &f.Geom, &rawProps, &f.UpdatedAt); err != nil {
-			return fmt.Errorf("scan feature: %w", err)
-		}
-		if err := json.Unmarshal(rawProps, &f.Properties); err != nil {
-			f.Properties = map[string]any{}
-		}
-		features = append(features, f)
+	features, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		return fmt.Errorf("collect snapshot rows: %w", err)
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	// Commit to cleanly end the transaction (rows already fully consumed).
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit snapshot tx: %w", err)
+	}
+
+	if features == nil {
+		features = []map[string]any{}
 	}
 
 	msg, err := json.Marshal(SnapshotMessage{Type: "snapshot", Features: features})

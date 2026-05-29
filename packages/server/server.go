@@ -27,10 +27,12 @@ const (
 
 // tableState holds the runtime state for one configured table.
 type tableState struct {
-	name    string
-	cols    ColumnConfig
-	clients map[string]*wsClient
-	mu      sync.RWMutex
+	name      string
+	cols      ColumnConfig
+	columns   []ColumnDef // introspected at startup, immutable after init
+	schemaMsg []byte      // pre-serialised SchemaMessage, sent as-is
+	clients   map[string]*wsClient
+	mu        sync.RWMutex
 }
 
 func (ts *tableState) addClient(c *wsClient) {

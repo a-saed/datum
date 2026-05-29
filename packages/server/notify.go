@@ -41,12 +41,17 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			continue
 		}
 
-		feature := Feature{
-			ID:         payload.ID,
-			Geom:       payload.Geom,
-			Properties: payload.Properties,
-			UpdatedAt:  payload.UpdatedAt,
+		// Support both old trigger format (flat fields) and new format (feature: {...}).
+		feature := payload.Feature
+		if feature == nil {
+			feature = Feature{
+				"id":         payload.LegacyID,
+				"geom":       payload.LegacyGeom,
+				"properties": payload.LegacyProperties,
+				"updated_at": payload.LegacyUpdatedAt,
+			}
 		}
+
 		delta := DeltaMessage{
 			Type:           "delta",
 			Op:             payload.Op,
@@ -64,14 +69,13 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			continue
 		}
 
-		geomBbox := extractBbox(payload.Geom)
+		geomStr, _ := feature["geom"].(string)
+		geomBbox := extractBbox(geomStr)
 		ts.broadcast(msg, payload.OriginClientID, geomBbox)
 	}
 }
 
-// extractBbox returns the bounding box [minX, minY, maxX, maxY] of a GeoJSON geometry.
-// Handles Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon.
-// Returns a zero bbox on error (broadcast will be skipped by intersection check).
+// extractBbox returns the bounding box [minX, minY, maxX, maxY] of a GeoJSON geometry string.
 func extractBbox(geojson string) [4]float64 {
 	if geojson == "" {
 		return [4]float64{}

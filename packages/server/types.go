@@ -13,11 +13,14 @@ func defaultColumns() ColumnConfig {
 	return ColumnConfig{ID: "id", Geom: "geom", UpdatedAt: "updated_at", Properties: "properties"}
 }
 
+// Feature is a flat map — all columns at the top level.
+type Feature = map[string]any
+
 // Wire protocol — client → server
 
 type SubscribeMessage struct {
 	Type     string     `json:"type"`
-	Table    string     `json:"table,omitempty"` // optional; omit when only one table is configured
+	Table    string     `json:"table,omitempty"`
 	BBox     [4]float64 `json:"bbox"`
 	ClientID string     `json:"client_id"`
 	Since    string     `json:"since,omitempty"`
@@ -45,13 +48,6 @@ type WriteMessage struct {
 
 // Wire protocol — server → client
 
-type Feature struct {
-	ID         string         `json:"id"`
-	Geom       string         `json:"geom"`
-	Properties map[string]any `json:"properties"`
-	UpdatedAt  string         `json:"updated_at"`
-}
-
 type SnapshotMessage struct {
 	Type     string    `json:"type"`
 	Features []Feature `json:"features"`
@@ -69,14 +65,19 @@ type AckMessage struct {
 	WriteIDs []string `json:"write_ids"`
 }
 
-// Internal — LISTEN/NOTIFY payload from PostGIS trigger
-
+// NotifyPayload — LISTEN/NOTIFY payload from PostGIS trigger.
+// Supports both old format (flat id/geom/properties/updated_at fields) and
+// new format (all columns nested under "feature"). Both are parsed at
+// the same time during the trigger transition period.
 type NotifyPayload struct {
-	Table          string         `json:"table"`
-	Op             string         `json:"op"`
-	ID             string         `json:"id"`
-	Geom           string         `json:"geom"`
-	Properties     map[string]any `json:"properties"`
-	UpdatedAt      string         `json:"updated_at"`
-	OriginClientID string         `json:"origin_client_id"`
+	Table string `json:"table"`
+	Op    string `json:"op"`
+	// New format: all columns nested under "feature"
+	Feature map[string]any `json:"feature,omitempty"`
+	// Old format: fixed 4-column flat fields (legacy trigger)
+	LegacyID         string         `json:"id,omitempty"`
+	LegacyGeom       string         `json:"geom,omitempty"`
+	LegacyProperties map[string]any `json:"properties,omitempty"`
+	LegacyUpdatedAt  string         `json:"updated_at,omitempty"`
+	OriginClientID   string         `json:"origin_client_id"`
 }
