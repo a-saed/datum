@@ -1,15 +1,16 @@
 // packages/client/src/client.ts
 import type { PGlite } from '@electric-sql/pglite'
 import { v4 as uuidv4 } from 'uuid'
-import { bootLocalDb } from './pglite.js'
-import { drainOutbox, applyDelta, markSynced } from './sync.js'
+import { bootLocalDb, setupSchema } from './pglite.js'
+import { drainOutbox, applyDelta, applyFeatures, markSynced } from './sync.js'
 import { connectWS, sendMessage } from './ws.js'
 import type {
   AckMessage,
+  ColumnDef,
   ConnectionStatus,
   DatumConfig,
   ServerMessage,
-  SnapshotMessage,
+  SchemaMessage,
   DeltaMessage,
 } from './types.js'
 
@@ -57,6 +58,7 @@ export class DatumClient {
   private resolveReady: (() => void) | null = null
   private inFlight = new Set<string>()
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private columns: ColumnDef[] | null = null
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
   private static readonly TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
@@ -262,8 +264,21 @@ export class DatumClient {
   }
 
   private async handleMessage(msg: ServerMessage): Promise<void> {
-    if (msg.type === 'snapshot') {
-      await this.loadSnapshot(msg as SnapshotMessage)
+    if (msg.type === 'schema') {
+      this.columns = (msg as SchemaMessage).columns
+    } else if (msg.type === 'snapshot') {
+      const columns = this.columns!
+      const wasRecreated = await setupSchema(this.db, this.tableName, columns)
+
+      if (wasRecreated && !this.needsSnapshot) {
+        // Schema changed on a returning visit — the snapshot was delta-filtered.
+        // Wipe is done; re-request a full snapshot.
+        this.needsSnapshot = true
+        await this.requestFullSnapshot()
+        return
+      }
+
+      await applyFeatures(this.db, msg.features, this.tableName, columns)
       this.needsSnapshot = false
       this.setStatus('connected')
       this.resolveReady?.()
@@ -272,8 +287,10 @@ export class DatumClient {
       // Flush any pending writes immediately rather than waiting for the next tick.
       void this.pushOutbox()
     } else if (msg.type === 'delta') {
-      await applyDelta(this.db, msg as DeltaMessage, this.tableName)
-      this.notifyChange()
+      if (this.columns) {
+        await applyDelta(this.db, msg as DeltaMessage, this.tableName, this.columns)
+        this.notifyChange()
+      }
     } else if (msg.type === 'ack') {
       const { write_ids } = msg as AckMessage
       await markSynced(this.db, write_ids)
@@ -282,34 +299,16 @@ export class DatumClient {
     }
   }
 
-  private async loadSnapshot(msg: SnapshotMessage): Promise<void> {
-    await this.db.exec(`
-      ALTER TABLE ${this.tableName} DISABLE TRIGGER datum_capture_changes;
-      BEGIN;
-    `)
-    try {
-      for (const f of msg.features) {
-        await this.db.query(`
-          INSERT INTO ${this.tableName} (id, geom, properties, updated_at)
-          VALUES (
-            $1::uuid,
-            ST_SetSRID(ST_GeomFromGeoJSON($2), 4326),
-            $3::jsonb,
-            $4::timestamptz
-          )
-          ON CONFLICT (id) DO UPDATE
-          SET geom       = EXCLUDED.geom,
-              properties = EXCLUDED.properties,
-              updated_at = EXCLUDED.updated_at
-        `, [f.id, f.geom, JSON.stringify(f.properties), f.updated_at])
-      }
-      await this.db.exec('COMMIT;')
-    } catch (err) {
-      await this.db.exec('ROLLBACK;')
-      throw err
-    } finally {
-      await this.db.exec(`ALTER TABLE ${this.tableName} ENABLE TRIGGER datum_capture_changes`)
-    }
+  private async requestFullSnapshot(): Promise<void> {
+    const token = await this.resolveToken()
+    sendMessage(this.ws, {
+      type:      'subscribe',
+      bbox:      this.config.bbox,
+      client_id: this.clientId,
+      ...(this.config.table ? { table: this.config.table } : {}),
+      ...(token ? { token } : {}),
+      // No 'since' — full snapshot
+    })
   }
 
   private async sendSubscribeWithSince(token?: string): Promise<void> {
