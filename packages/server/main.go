@@ -133,7 +133,9 @@ func main() {
 	// Warn if connected as superuser — RLS would be bypassed.
 	if fileCfg.Auth.Enabled() {
 		var isSuperuser bool
-		if err := pool.QueryRow(ctx, `SELECT rolsuper FROM pg_roles WHERE rolname = current_user`).Scan(&isSuperuser); err == nil && isSuperuser {
+		if err := pool.QueryRow(ctx, `SELECT rolsuper FROM pg_roles WHERE rolname = current_user`).Scan(&isSuperuser); err != nil {
+			log.Printf("datum-server: could not determine if database role is superuser: %v", err)
+		} else if isSuperuser {
 			log.Printf("WARN datum-server: DATABASE_URL connects as a superuser — Row Level Security will be bypassed. Create a restricted role for production use.")
 		}
 	}
