@@ -11,7 +11,7 @@ import (
 
 const maxEditsPerBatch = 500
 
-func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string, edits []WriteEdit) ([]string, error) {
+func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string, claims map[string]any, edits []WriteEdit) ([]string, error) {
 	if len(edits) > maxEditsPerBatch {
 		return nil, fmt.Errorf("batch too large: %d edits (max %d)", len(edits), maxEditsPerBatch)
 	}
@@ -32,6 +32,11 @@ func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string
 	// Tag the transaction so the trigger can embed origin_client_id in the NOTIFY payload.
 	if _, err := tx.Exec(ctx, `SELECT set_config('datum.client_id', $1, true)`, clientID); err != nil {
 		return nil, fmt.Errorf("set client_id: %w", err)
+	}
+
+	// Set JWT claims as transaction-local session vars for RLS.
+	if err := setSessionClaims(ctx, tx, claims); err != nil {
+		return nil, err
 	}
 
 	deleteSQL := fmt.Sprintf(`DELETE FROM %s WHERE %s = $1::uuid`, table, id)
@@ -83,4 +88,19 @@ func applyWrites(ctx context.Context, s *server, ts *tableState, clientID string
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return writeIDs, nil
+}
+
+// setSessionClaims sets datum.<key> = val for each claim as a transaction-local
+// session variable. No-op when claims is nil or empty.
+func setSessionClaims(ctx context.Context, tx pgx.Tx, claims map[string]any) error {
+	for key, val := range claims {
+		if _, err := tx.Exec(ctx,
+			`SELECT set_config($1, $2, true)`,
+			"datum."+key,
+			fmt.Sprintf("%v", val),
+		); err != nil {
+			return fmt.Errorf("set claim %s: %w", key, err)
+		}
+	}
+	return nil
 }

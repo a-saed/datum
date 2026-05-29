@@ -287,7 +287,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				log.Printf("datum-server: client %s: unknown table %q for write", client.id, msg.Table)
 				continue
 			}
-			writeIDs, err := applyWrites(r.Context(), s, ts, client.id, msg.Edits)
+			writeIDs, err := applyWrites(r.Context(), s, ts, client.id, client.claims, msg.Edits)
 			if err != nil {
 				log.Printf("datum-server: write error for %s: %v", client.id, err)
 				continue
