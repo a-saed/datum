@@ -3,6 +3,14 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { postgis } from '@electric-sql/pglite-postgis'
 import { setupSchema, SCHEMA_VERSION } from '../src/pglite.js'
+import type { ColumnDef } from '../src/schema.js'
+
+const DEFAULT_COLUMNS: ColumnDef[] = [
+  { name: 'id',         pg_type: 'uuid',        role: 'id',         nullable: false },
+  { name: 'geom',       pg_type: 'geometry',    role: 'geom',       nullable: true  },
+  { name: 'properties', pg_type: 'jsonb',       role: 'properties', nullable: false },
+  { name: 'updated_at', pg_type: 'timestamptz', role: 'updated_at', nullable: false },
+]
 
 let db: PGlite
 
@@ -92,30 +100,30 @@ describe('setupSchema', () => {
     return d
   }
 
-  it('first call creates tables and returns isFirstVisit=true', async () => {
+  it('first call creates tables and returns true (wiped)', async () => {
     const d = await makeDb()
-    const isFirstVisit = await setupSchema(d)
-    expect(isFirstVisit).toBe(true)
+    const wiped = await setupSchema(d, 'features', DEFAULT_COLUMNS)
+    expect(wiped).toBe(true)
     const { rows } = await d.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM features`
     )
     expect(rows[0].count).toBe(0)
   })
 
-  it('returns isFirstVisit=false when features exist', async () => {
+  it('second call with same schema returns false (no wipe)', async () => {
     const d = await makeDb()
-    await setupSchema(d)
+    await setupSchema(d, 'features', DEFAULT_COLUMNS)
     await d.query(
       `INSERT INTO features (geom, properties, updated_at)
        VALUES (ST_SetSRID(ST_MakePoint(10, 20), 4326), '{}', now())`
     )
-    const isFirstVisit = await setupSchema(d)
-    expect(isFirstVisit).toBe(false)
+    const wiped = await setupSchema(d, 'features', DEFAULT_COLUMNS)
+    expect(wiped).toBe(false)
   })
 
-  it('schema version mismatch wipes tables and returns isFirstVisit=true', async () => {
+  it('schema version mismatch wipes tables and returns true', async () => {
     const d = await makeDb()
-    await setupSchema(d)
+    await setupSchema(d, 'features', DEFAULT_COLUMNS)
     // Insert a feature then corrupt the schema version
     await d.query(
       `INSERT INTO features (geom, properties, updated_at)
@@ -123,8 +131,8 @@ describe('setupSchema', () => {
     )
     await d.exec(`UPDATE _datum_meta SET value = '0' WHERE key = 'schema_version'`)
     // Re-run setup — should wipe features
-    const isFirstVisit = await setupSchema(d)
-    expect(isFirstVisit).toBe(true)
+    const wiped = await setupSchema(d, 'features', DEFAULT_COLUMNS)
+    expect(wiped).toBe(true)
     const { rows } = await d.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM features`
     )
@@ -133,7 +141,7 @@ describe('setupSchema', () => {
 
   it('sets schema_version in _datum_meta', async () => {
     const d = await makeDb()
-    await setupSchema(d)
+    await setupSchema(d, 'features', DEFAULT_COLUMNS)
     const { rows } = await d.query<{ value: string }>(
       `SELECT value FROM _datum_meta WHERE key = 'schema_version'`
     )
@@ -142,7 +150,7 @@ describe('setupSchema', () => {
 
   it('trigger writes to outbox on INSERT', async () => {
     const d = await makeDb()
-    await setupSchema(d)
+    await setupSchema(d, 'features', DEFAULT_COLUMNS)
     await d.query(
       `INSERT INTO features (id, geom, properties, updated_at)
        VALUES (gen_random_uuid(), ST_SetSRID(ST_MakePoint(10, 20), 4326), '{"name":"test"}', now())`

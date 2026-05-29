@@ -5,13 +5,21 @@ import { postgis } from '@electric-sql/pglite-postgis'
 import { setupSchema } from '../src/pglite.js'
 import { drainOutbox, applyDelta, markSynced } from '../src/sync.js'
 import type { DeltaMessage } from '../src/types.js'
+import type { ColumnDef } from '../src/schema.js'
+
+const DEFAULT_COLUMNS: ColumnDef[] = [
+  { name: 'id',         pg_type: 'uuid',        role: 'id',         nullable: false },
+  { name: 'geom',       pg_type: 'geometry',    role: 'geom',       nullable: true  },
+  { name: 'properties', pg_type: 'jsonb',       role: 'properties', nullable: false },
+  { name: 'updated_at', pg_type: 'timestamptz', role: 'updated_at', nullable: false },
+]
 
 let db: PGlite
 
 beforeEach(async () => {
   db = new PGlite({ extensions: { postgis } })
   await db.exec('CREATE EXTENSION IF NOT EXISTS postgis')
-  await setupSchema(db)
+  await setupSchema(db, 'features', DEFAULT_COLUMNS)
 })
 
 describe('drainOutbox', () => {

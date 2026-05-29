@@ -1,26 +1,37 @@
 // packages/client/src/pglite.ts
 import { PGlite } from '@electric-sql/pglite'
 import { postgis } from '@electric-sql/pglite-postgis'
+import { pgTypeToDDL, hashSchema, colByRole, type ColumnDef } from './schema.js'
 
-export const SCHEMA_VERSION = '2'
+export const SCHEMA_VERSION = '3'
 
 /**
- * Boot the local PGlite database backed by IndexedDB.
- * Returns the db instance and whether this is a first visit (empty DB).
+ * Boot the local PGlite database. Returns the db instance and whether this
+ * looks like a first visit (no valid schema stored yet).
+ * Full schema setup is deferred to setupSchema() once columns are known.
  */
 export async function bootLocalDb(dbName = 'datum', tableName = 'features'): Promise<{ db: PGlite; isFirstVisit: boolean }> {
   const db = new PGlite(`idb://datum-${dbName}`, { extensions: { postgis } })
   await db.exec('CREATE EXTENSION IF NOT EXISTS postgis')
-  const isFirstVisit = await setupSchema(db, tableName)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS _datum_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `)
+  const { rows } = await db.query<{ value: string }>(
+    `SELECT value FROM _datum_meta WHERE key = 'schema_version'`
+  )
+  const isFirstVisit = rows.length === 0 || rows[0].value !== SCHEMA_VERSION
   return { db, isFirstVisit }
 }
 
 /**
- * Create or validate the local schema. Returns true if the DB has no rows
- * (first visit or post-schema-wipe), false if existing data is present.
+ * Validate and (if needed) recreate the local schema using the server's column
+ * definitions. Returns true if the DB was wiped (first visit or schema change).
  * Exported for testing with in-memory PGlite instances.
  */
-export async function setupSchema(db: PGlite, tableName = 'features'): Promise<boolean> {
+export async function setupSchema(db: PGlite, tableName: string, columns: ColumnDef[]): Promise<boolean> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_meta (
       key   TEXT PRIMARY KEY,
@@ -28,18 +39,23 @@ export async function setupSchema(db: PGlite, tableName = 'features'): Promise<b
     )
   `)
 
-  const { rows } = await db.query<{ value: string }>(
+  const schemaHash = hashSchema(columns)
+
+  const { rows: vRows } = await db.query<{ value: string }>(
     `SELECT value FROM _datum_meta WHERE key = 'schema_version'`
   )
+  const { rows: hRows } = await db.query<{ value: string }>(
+    `SELECT value FROM _datum_meta WHERE key = 'schema_hash'`
+  )
 
-  if (rows.length > 0 && rows[0].value === SCHEMA_VERSION) {
-    const { rows: countRows } = await db.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM ${tableName}`
-    )
-    return countRows[0].count === 0
+  const currentVersion = vRows[0]?.value
+  const currentHash    = hRows[0]?.value
+
+  if (currentVersion === SCHEMA_VERSION && currentHash === schemaHash) {
+    return false // schema is current — no wipe needed
   }
 
-  // Schema absent or outdated — wipe and recreate
+  // Wipe and recreate.
   await db.exec(`
     DROP TABLE IF EXISTS _datum_outbox;
     DROP TABLE IF EXISTS ${tableName};
@@ -47,14 +63,7 @@ export async function setupSchema(db: PGlite, tableName = 'features'): Promise<b
     DELETE FROM _datum_meta;
   `)
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS ${tableName} (
-      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      geom        GEOMETRY(Geometry, 4326),
-      properties  JSONB DEFAULT '{}',
-      updated_at  TIMESTAMPTZ DEFAULT now()
-    )
-  `)
+  await db.exec(buildCreateTable(tableName, columns))
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_outbox (
@@ -68,32 +77,7 @@ export async function setupSchema(db: PGlite, tableName = 'features'): Promise<b
     )
   `)
 
-  await db.exec(`
-    CREATE OR REPLACE FUNCTION _datum_capture_change()
-    RETURNS TRIGGER AS $$
-    BEGIN
-      IF TG_OP = 'DELETE' THEN
-        INSERT INTO _datum_outbox (op, feature_id, data, updated_at)
-        VALUES ('delete', OLD.id, NULL, now());
-        RETURN OLD;
-      ELSE
-        INSERT INTO _datum_outbox (op, feature_id, data, updated_at)
-        VALUES (
-          lower(TG_OP),
-          NEW.id,
-          jsonb_build_object(
-            'geom',       ST_AsGeoJSON(NEW.geom),
-            'properties', NEW.properties,
-            'updated_at', NEW.updated_at
-          ),
-          NEW.updated_at
-        );
-        RETURN NEW;
-      END IF;
-    END;
-    $$ LANGUAGE plpgsql
-  `)
-
+  await db.exec(buildTriggerFunction(tableName, columns))
   await db.exec(`
     DROP TRIGGER IF EXISTS datum_capture_changes ON ${tableName};
     CREATE TRIGGER datum_capture_changes
@@ -102,10 +86,62 @@ export async function setupSchema(db: PGlite, tableName = 'features'): Promise<b
   `)
 
   await db.query(
-    `INSERT INTO _datum_meta (key, value) VALUES ('schema_version', $1)
+    `INSERT INTO _datum_meta (key, value) VALUES ('schema_version', $1), ('schema_hash', $2)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [SCHEMA_VERSION]
+    [SCHEMA_VERSION, schemaHash]
   )
 
   return true
+}
+
+function quote(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`
+}
+
+function buildCreateTable(tableName: string, columns: ColumnDef[]): string {
+  const defs = columns.map(col => {
+    const type    = pgTypeToDDL(col.pg_type)
+    const pk      = col.role === 'id'         ? ' PRIMARY KEY' : ''
+    const notnull = !col.nullable && col.role !== 'id' ? ' NOT NULL' : ''
+    const def     = col.role === 'id'         ? (col.pg_type === 'uuid' ? ` DEFAULT gen_random_uuid()` : '') :
+                    col.role === 'properties' ? ` DEFAULT '{}'` :
+                    col.role === 'updated_at'  ? ' DEFAULT now()' : ''
+    return `  ${quote(col.name)} ${type}${pk}${notnull}${def}`
+  })
+  return `CREATE TABLE ${tableName} (\n${defs.join(',\n')}\n)`
+}
+
+function buildTriggerFunction(tableName: string, columns: ColumnDef[]): string {
+  const idCol  = colByRole(columns, 'id')
+  const updCol = colByRole(columns, 'updated_at')
+
+  const cols = columns.filter(c => c.role !== 'id')
+
+  const pairs = cols.map(col =>
+    col.role === 'geom'
+      ? `'${col.name}', ST_AsGeoJSON(NEW.${quote(col.name)})`
+      : `'${col.name}', NEW.${quote(col.name)}`
+  ).join(',\n            ')
+
+  return `
+CREATE OR REPLACE FUNCTION _datum_capture_change() RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    INSERT INTO _datum_outbox (op, feature_id, data, updated_at)
+    VALUES ('delete', OLD.${quote(idCol.name)}, NULL, now());
+    RETURN OLD;
+  ELSE
+    INSERT INTO _datum_outbox (op, feature_id, data, updated_at)
+    VALUES (
+      lower(TG_OP),
+      NEW.${quote(idCol.name)},
+      jsonb_build_object(
+        ${pairs}
+      ),
+      NEW.${quote(updCol.name)}
+    );
+    RETURN NEW;
+  END IF;
+END;
+$$ LANGUAGE plpgsql`
 }
