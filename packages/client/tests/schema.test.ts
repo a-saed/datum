@@ -1,4 +1,3 @@
-// packages/client/src/schema.test.ts
 import { describe, it, expect } from 'vitest'
 import {
   pgTypeToDDL,
@@ -6,7 +5,7 @@ import {
   colByRole,
   dataColumns,
   type ColumnDef,
-} from './schema.js'
+} from '../src/schema.js'
 
 const BASE_COLS: ColumnDef[] = [
   { name: 'id',         pg_type: 'uuid',        role: 'id',         nullable: false },
