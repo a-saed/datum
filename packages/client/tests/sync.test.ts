@@ -84,7 +84,7 @@ describe('applyDelta', () => {
       },
     }
 
-    await applyDelta(db, delta)
+    await applyDelta(db, delta, 'features', DEFAULT_COLUMNS)
 
     const res = await db.query<{ id: string }>(
       `SELECT id::text FROM features WHERE id = '00000000-0000-0000-0000-000000000002'`
@@ -105,7 +105,7 @@ describe('applyDelta', () => {
       },
     }
 
-    await applyDelta(db, delta)
+    await applyDelta(db, delta, 'features', DEFAULT_COLUMNS)
 
     const res = await db.query<{ count: string | number }>(
       `SELECT COUNT(*) AS count FROM _datum_outbox`
