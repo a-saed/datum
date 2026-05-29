@@ -42,23 +42,32 @@ const db = await DatumClient.connect({
 Runs a SQL query against the local PGlite database. **No network involved.** Full PostGIS is available.
 
 ```ts
+// With typed columns (v0.7.0+): direct column access
 const result = await db.query<{ name: string; area: number }>(
-  `SELECT properties->>'name' AS name, ST_Area(geom) AS area
+  `SELECT name, ST_Area(geom) AS area
    FROM features
    WHERE ST_Area(geom) > $1`,
   [1000]
 )
 // result.rows: Array<{ name: string; area: number }>
+
+// With JSONB properties bag (also supported):
+// SELECT properties->>'name' AS name, ST_Area(geom) AS area FROM features WHERE ...
 ```
 
 `INSERT`, `UPDATE`, and `DELETE` statements are captured automatically by an outbox trigger and pushed to datum-server on the next sync cycle. No special API needed — just write normal SQL.
 
 ```ts
+// With typed columns — insert values directly into each column
 await db.query(
-  `INSERT INTO features (geom, properties, updated_at)
-   VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())`,
-  [lng, lat, JSON.stringify({ name: 'My point' })]
+  `INSERT INTO features (geom, name, updated_at)
+   VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, now())`,
+  [lng, lat, 'My point']
 )
+
+// With JSONB properties bag (also supported):
+// INSERT INTO features (geom, properties, updated_at)
+// VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())
 ```
 
 ---

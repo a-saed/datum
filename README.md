@@ -94,7 +94,7 @@ docker run \
   ghcr.io/a-saed/datum-server
 ```
 
-> **Security note:** datum-server has no user authentication — any client that can reach the WebSocket endpoint can read and write data. Set `allowed_origin` to restrict browser access, and firewall the port for anything sensitive. Per-user auth is on the [roadmap](ROADMAP.md).
+> **Security note:** Set `allowed_origin` to restrict browser access, and firewall the port in production. datum-server supports JWT authentication (HS256/RS256/ES256) — see [Authentication](/auth) in the docs.
 
 ## Documentation
 

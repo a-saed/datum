@@ -1,12 +1,5 @@
 # Datum Roadmap
 
-## High priority
-
-### Typed column support
-datum supports custom column names via `col_id`, `col_geom`, `col_updated_at`, `col_properties` in `datum.yaml`. However the `properties` column must still be a single `JSONB` bag. Users with typed columns (`name TEXT`, `height FLOAT`, etc.) need typed column support so datum can map individual columns into the properties object automatically.
-
----
-
 ## Medium priority
 
 
@@ -27,6 +20,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Typed column support (v0.7.0)** — datum auto-introspects the server table at startup and mirrors the exact column structure in PGlite. Any columns beyond the 4 required ones (`id`, `geom`, `updated_at`, `properties`) are synced automatically and queryable with normal SQL on both sides — no extra configuration.
 - **Per-user authentication (v0.6.0)** — JWT auth (HS256/RS256/ES256). Token in `subscribe` message, all claims forwarded as `datum.<key>` Postgres session variables for RLS. Auto token refresh before expiry. Startup warning when connected as superuser. Fully opt-in.
 - **Security and correctness hardening (0.5.0)** — Ack-based write sync (server acks writes before client marks synced; retries on reconnect). WS per-connection read limits, read deadlines, ping/pong keepalive. Write batch capped at 500. Rate limiter uses real client IP (X-Forwarded-For aware). Delta broadcast uses full geometry bbox (not just first vertex) for correct routing of polygons and lines. Graceful shutdown on SIGTERM. Outbox ordered by insertion seq not feature timestamp.
 - **Pending writes visibility** — `client.pendingCount` getter and `client.onPendingChange(cb)` subscription expose the outbox backlog in real time. Fires after every local write and after every sync flush.
