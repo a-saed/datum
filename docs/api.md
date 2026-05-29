@@ -392,14 +392,33 @@ Server closes with code 4401 if the token is missing, invalid, or expired. The c
   "type": "snapshot",
   "features": [
     {
-      "id": "uuid",
+      "id": "550e8400-e29b-41d4-a716-446655440000",
       "geom": "{\"type\":\"Point\",\"coordinates\":[-122.4,37.8]}",
-      "properties": { "name": "Site A" },
+      "name": "Site A",
+      "properties": { "note": "check annually" },
       "updated_at": "2026-05-26T10:00:00Z"
     }
   ]
 }
 ```
+
+Features are flat maps — every column is a top-level key. Geometry is always a GeoJSON string.
+
+**Schema** — sent once per connection, immediately before the first snapshot. Describes every column in the server table:
+```json
+{
+  "type": "schema",
+  "columns": [
+    { "name": "id",         "pg_type": "uuid",        "role": "id",         "nullable": false },
+    { "name": "geom",       "pg_type": "geometry",    "role": "geom",       "nullable": false },
+    { "name": "name",       "pg_type": "text",        "role": "data",       "nullable": true  },
+    { "name": "properties", "pg_type": "jsonb",       "role": "properties", "nullable": true  },
+    { "name": "updated_at", "pg_type": "timestamptz", "role": "updated_at", "nullable": false }
+  ]
+}
+```
+
+`role` is one of `"id"`, `"geom"`, `"updated_at"`, `"properties"`, or `"data"` (any extra typed column). The client uses this to recreate the local PGlite table and build dynamic SQL for upserts. Not re-sent on bbox updates.
 
 **Ack** — sent by the server after a `write` batch is applied successfully:
 ```json
@@ -417,12 +436,13 @@ The client marks outbox entries as synced only after receiving the ack. If the c
   "type": "delta",
   "op": "update",
   "feature": {
-    "id": "uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
     "geom": "{\"type\":\"Point\",\"coordinates\":[-122.4,37.8]}",
-    "properties": { "name": "Site A (updated)" },
+    "name": "Site A (updated)",
+    "properties": { "note": "check annually" },
     "updated_at": "2026-05-26T10:05:00.000Z"
   },
-  "origin_client_id": "uuid"
+  "origin_client_id": "550e8400-e29b-41d4-a716-446655440001"
 }
 ```
 
@@ -442,7 +462,7 @@ datum-server creates the table if it does not exist. If you are bringing an **ex
 |---|---|---|
 | UUID primary key | `id` | `col_id` |
 | PostGIS geometry (WGS-84) | `geom` | `col_geom` |
-| JSONB properties bag | `properties` | `col_properties` |
+| JSONB properties bag *(optional)* | `properties` | `col_properties` |
 | Last-modified timestamp | `updated_at` | `col_updated_at` |
 
 - **geometry** — any PostGIS geometry type in EPSG:4326. Points, lines, and polygons all work.

@@ -43,7 +43,40 @@ On the **first visit**, PGlite boots in-memory, downloads a full snapshot from t
 
 On **returning visits**, PGlite loads directly from IndexedDB (~200ms). Local data is immediately queryable. In the background, datum connects to the server and requests only features updated since `MAX(updated_at)` in the local database — a delta catch-up that runs without blocking the UI.
 
-A `_datum_meta` table tracks the schema version. If the client library updates the local schema, it automatically wipes IndexedDB and performs a full re-sync on the next visit.
+A `_datum_meta` table tracks two values: `schema_version` (bumped when the client library changes its internal schema) and `schema_hash` (a fingerprint of the server table's column list, sent with every connection). On the next visit the client compares both. If either has changed — a client library upgrade or a server-side `ALTER TABLE` — PGlite wipes IndexedDB and performs a full re-sync automatically.
+
+## Schema cloning
+
+When datum-server starts, it introspects the configured table via `pg_catalog` and caches the full column list — names, types, and roles. On every new WebSocket connection the server sends a `schema` message before the first snapshot:
+
+```json
+{
+  "type": "schema",
+  "columns": [
+    { "name": "id",         "pg_type": "uuid",        "role": "id",         "nullable": false },
+    { "name": "geom",       "pg_type": "geometry",    "role": "geom",       "nullable": false },
+    { "name": "name",       "pg_type": "text",        "role": "data",       "nullable": true  },
+    { "name": "properties", "pg_type": "jsonb",       "role": "properties", "nullable": true  },
+    { "name": "updated_at", "pg_type": "timestamptz", "role": "updated_at", "nullable": false }
+  ]
+}
+```
+
+The client hashes the column list and compares it to the stored `schema_hash`. If they differ — because a column was added or removed on the server — the client automatically wipes its local PGlite database and recreates the table with the correct column structure before loading the snapshot. No configuration required.
+
+This means users write the same SQL locally as they do on the server:
+
+```ts
+// A table with name TEXT and height FLOAT8 columns —
+// works identically against local PGlite and the remote PostGIS
+const result = await db.query(`
+  SELECT name, height
+  FROM features
+  WHERE height > 10
+`)
+```
+
+The `properties` JSONB column is optional and coexists with typed columns. A table can have both.
 
 ## Connection status and auto-reconnect
 
