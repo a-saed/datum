@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"maps"
 	"os"
 	"testing"
 	"time"
@@ -16,9 +17,7 @@ import (
 func makeHS256Token(t *testing.T, secret string, claims map[string]any, exp time.Time) string {
 	t.Helper()
 	mc := jwt.MapClaims{"exp": exp.Unix()}
-	for k, v := range claims {
-		mc[k] = v
-	}
+	maps.Copy(mc, claims)
 	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, mc).SignedString([]byte(secret))
 	if err != nil {
 		t.Fatalf("sign token: %v", err)

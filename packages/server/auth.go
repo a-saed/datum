@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -80,9 +81,7 @@ func (v *jwtVerifier) Verify(tokenStr string) (map[string]any, error) {
 		return nil, errors.New("invalid token claims")
 	}
 	out := make(map[string]any, len(mc))
-	for k, v := range mc {
-		out[k] = v
-	}
+	maps.Copy(out, mc)
 	return out, nil
 }
 
