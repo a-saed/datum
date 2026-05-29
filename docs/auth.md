@@ -71,10 +71,10 @@ datum sets every JWT claim as a Postgres session variable under `datum.<claim>`.
 -- datum.role   = 'member'
 
 CREATE POLICY tenant_isolation ON features
-  USING (org_id = current_setting('datum.org_id')::uuid);
+  USING (org_id = current_setting('datum.org_id', true)::uuid);
 
 CREATE POLICY user_writes_own ON features
-  WITH CHECK (owner_id = current_setting('datum.sub')::uuid);
+  WITH CHECK (owner_id = current_setting('datum.sub', true)::uuid);
 ```
 
 ## Supported algorithms
