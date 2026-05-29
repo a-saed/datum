@@ -21,6 +21,12 @@ type SubscribeMessage struct {
 	BBox     [4]float64 `json:"bbox"`
 	ClientID string     `json:"client_id"`
 	Since    string     `json:"since,omitempty"`
+	Token    string     `json:"token,omitempty"`
+}
+
+type AuthMessage struct {
+	Type  string `json:"type"`
+	Token string `json:"token"`
 }
 
 type WriteEdit struct {

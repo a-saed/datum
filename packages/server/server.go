@@ -62,11 +62,12 @@ func (ts *tableState) broadcast(msg []byte, originClientID string, geomBbox [4]f
 }
 
 type wsClient struct {
-	id    string
-	table string // which table this client is subscribed to
-	bbox  [4]float64
-	send  chan []byte
-	conn  *websocket.Conn
+	id     string
+	table  string // which table this client is subscribed to
+	bbox   [4]float64
+	send   chan []byte
+	conn   *websocket.Conn
+	claims map[string]any // nil when auth not configured
 }
 
 type ipLimiter struct {
@@ -84,9 +85,10 @@ type server struct {
 	ipLimiters   map[string]*ipLimiter
 	ipMu         sync.Mutex
 	mux          *http.ServeMux
+	verifier     Verifier
 }
 
-func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin string, writeLimit int) *server {
+func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin string, writeLimit int, verifier Verifier) *server {
 	s := &server{
 		pool:       pool,
 		tables:     make(map[string]*tableState, len(tables)),
@@ -94,6 +96,7 @@ func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin str
 		ipLimiters: make(map[string]*ipLimiter),
 		port:       port,
 		mux:        http.NewServeMux(),
+		verifier:   verifier,
 	}
 	for _, ts := range tables {
 		s.tables[ts.name] = ts

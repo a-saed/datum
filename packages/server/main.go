@@ -124,6 +124,20 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Build JWT verifier (nil when auth not configured).
+	verifier, err := newVerifier(fileCfg.Auth)
+	if err != nil {
+		log.Fatalf("datum-server: auth config: %v", err)
+	}
+
+	// Warn if connected as superuser — RLS would be bypassed.
+	if fileCfg.Auth.Enabled() {
+		var isSuperuser bool
+		if err := pool.QueryRow(ctx, `SELECT rolsuper FROM pg_roles WHERE rolname = current_user`).Scan(&isSuperuser); err == nil && isSuperuser {
+			log.Printf("WARN datum-server: DATABASE_URL connects as a superuser — Row Level Security will be bypassed. Create a restricted role for production use.")
+		}
+	}
+
 	for _, ts := range tables {
 		if err := runMigration(ctx, pool, ts.name, ts.cols); err != nil {
 			log.Fatalf("datum-server: migration failed for table %q: %v", ts.name, err)
@@ -131,7 +145,7 @@ func main() {
 		log.Printf("datum-server: migration applied to table %q", ts.name)
 	}
 
-	srv := newServer(pool, tables, port, allowedOrigin, writeLimit)
+	srv := newServer(pool, tables, port, allowedOrigin, writeLimit, verifier)
 	log.Printf("datum-server: listening on :%s", port)
 	if err := srv.run(ctx); err != nil {
 		log.Fatalf("datum-server: %v", err)
