@@ -49,6 +49,10 @@ func installTrigger(ctx context.Context, pool *pgxpool.Pool, tableName string, c
 		}
 	}
 
+	if idCol == "" {
+		return fmt.Errorf("installTrigger %q: no id column found", tableName)
+	}
+
 	// Build jsonb_build_object(...) pairs for all columns except id.
 	// geom columns use ST_AsGeoJSON; all others use the raw value.
 	var newPairs, oldPairs []string
@@ -56,7 +60,7 @@ func installTrigger(ctx context.Context, pool *pgxpool.Pool, tableName string, c
 		if c.Role == "id" {
 			continue
 		}
-		key := "'" + c.Name + "'"
+		key := "'" + strings.ReplaceAll(c.Name, "'", "''") + "'"
 		colQ := pgx.Identifier{c.Name}.Sanitize()
 		if c.Role == "geom" {
 			newPairs = append(newPairs, key+", ST_AsGeoJSON(NEW."+colQ+")")
