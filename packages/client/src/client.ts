@@ -267,7 +267,8 @@ export class DatumClient {
     if (msg.type === 'schema') {
       this.columns = (msg as SchemaMessage).columns
     } else if (msg.type === 'snapshot') {
-      const columns = this.columns!
+      if (!this.columns) throw new Error('datum: received snapshot before schema message')
+      const columns = this.columns
       const wasRecreated = await setupSchema(this.db, this.tableName, columns)
 
       if (wasRecreated && !this.needsSnapshot) {
@@ -309,6 +310,7 @@ export class DatumClient {
       ...(token ? { token } : {}),
       // No 'since' — full snapshot
     })
+    if (token) this.scheduleTokenRefresh(token)
   }
 
   private async sendSubscribeWithSince(token?: string): Promise<void> {
