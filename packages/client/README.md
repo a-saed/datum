@@ -11,17 +11,18 @@ const db = await DatumClient.connect({
 })
 
 // Full PostGIS runs locally in WASM — no network round-trip
+// datum mirrors the server schema locally — query typed columns directly
 const result = await db.query<{ name: string }>(
-  `SELECT properties->>'name' AS name FROM features
+  `SELECT name FROM features
    WHERE ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))`,
   [-122.5, 37.7, -122.4, 37.8]
 )
 
 // Writes sync to the server automatically in the background
 await db.query(
-  `INSERT INTO features (geom, properties, updated_at)
-   VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3::jsonb, now())`,
-  [lng, lat, JSON.stringify({ name: 'Field site A' })]
+  `INSERT INTO features (geom, name, updated_at)
+   VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, now())`,
+  [lng, lat, 'Field site A']
 )
 ```
 
