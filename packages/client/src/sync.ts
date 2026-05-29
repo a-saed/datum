@@ -3,6 +3,8 @@ import type { PGlite } from '@electric-sql/pglite'
 import type { ChangeEvent, DeltaMessage, Feature } from './types.js'
 import type { ColumnDef } from './schema.js'
 
+const q = (name: string) => `"${name.replace(/"/g, '""')}"`
+
 export async function drainOutbox(db: PGlite): Promise<ChangeEvent[]> {
   const res = await db.query<{
     write_id:   string
@@ -42,15 +44,15 @@ export async function markSynced(db: PGlite, writeIds: string[]): Promise<void> 
  */
 export async function applyDelta(db: PGlite, delta: DeltaMessage, tableName: string, columns: ColumnDef[]): Promise<void> {
   const f = delta.feature as Record<string, unknown>
-  await db.exec(`ALTER TABLE ${tableName} DISABLE TRIGGER datum_capture_changes`)
+  await db.exec(`ALTER TABLE ${q(tableName)} DISABLE TRIGGER datum_capture_changes`)
   try {
     if (delta.op === 'delete') {
-      await db.query(`DELETE FROM ${tableName} WHERE id = $1`, [f['id']])
+      await db.query(`DELETE FROM ${q(tableName)} WHERE id = $1`, [f['id']])
     } else {
       await upsertFeature(db, tableName, f, columns)
     }
   } finally {
-    await db.exec(`ALTER TABLE ${tableName} ENABLE TRIGGER datum_capture_changes`)
+    await db.exec(`ALTER TABLE ${q(tableName)} ENABLE TRIGGER datum_capture_changes`)
   }
 }
 
@@ -59,7 +61,7 @@ export async function applyDelta(db: PGlite, delta: DeltaMessage, tableName: str
  * transaction. Trigger is disabled for the duration. Used by loadSnapshot.
  */
 export async function applyFeatures(db: PGlite, features: Feature[], tableName: string, columns: ColumnDef[]): Promise<void> {
-  await db.exec(`ALTER TABLE ${tableName} DISABLE TRIGGER datum_capture_changes`)
+  await db.exec(`ALTER TABLE ${q(tableName)} DISABLE TRIGGER datum_capture_changes`)
   try {
     await db.exec('BEGIN')
     try {
@@ -72,7 +74,7 @@ export async function applyFeatures(db: PGlite, features: Feature[], tableName: 
       throw err
     }
   } finally {
-    await db.exec(`ALTER TABLE ${tableName} ENABLE TRIGGER datum_capture_changes`)
+    await db.exec(`ALTER TABLE ${q(tableName)} ENABLE TRIGGER datum_capture_changes`)
   }
 }
 
@@ -80,10 +82,10 @@ export async function applyFeatures(db: PGlite, features: Feature[], tableName: 
 async function upsertFeature(db: PGlite, tableName: string, feature: Record<string, unknown>, columns: ColumnDef[]): Promise<void> {
   const writeCols = columns.filter(c => c.role !== 'id')
 
-  const idCol  = columns.find(c => c.role === 'id')!
-  const updCol = columns.find(c => c.role === 'updated_at')!
-
-  const q = (name: string) => `"${name.replace(/"/g, '""')}"`
+  const idCol  = columns.find(c => c.role === 'id')
+  const updCol = columns.find(c => c.role === 'updated_at')
+  if (!idCol)  throw new Error(`datum: no id column for table "${tableName}"`)
+  if (!updCol) throw new Error(`datum: no updated_at column for table "${tableName}"`)
 
   const insertCols  = [q(idCol.name), ...writeCols.map(c => q(c.name))]
   const args: unknown[] = [feature[idCol.name] ?? null]
@@ -119,11 +121,11 @@ async function upsertFeature(db: PGlite, tableName: string, feature: Record<stri
   const updQ = q(updCol.name)
 
   const sql = `
-    INSERT INTO ${tableName} (${insertCols.join(', ')})
+    INSERT INTO ${q(tableName)} (${insertCols.join(', ')})
     VALUES (${valuePhs.join(', ')})
     ON CONFLICT (${q(idCol.name)}) DO UPDATE
     SET ${setClauses}
-    WHERE EXCLUDED.${updQ} > ${tableName}.${updQ}
+    WHERE EXCLUDED.${updQ} > ${q(tableName)}.${updQ}
   `
 
   await db.query(sql, args)
