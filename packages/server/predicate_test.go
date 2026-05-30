@@ -33,6 +33,9 @@ func TestCheckBlocklist(t *testing.T) {
 		"pg_write_file('/tmp/x','x',0)",
 		"1 = EXECUTE 'DROP TABLE t'",
 		"DO $$ BEGIN RAISE NOTICE 'x'; END $$",
+		"lo_export(fd, '/tmp/x')",
+		"copy_to('/tmp/out','csv')",
+		"pg_write_binary_file('/tmp/x','\\x00'::bytea)",
 	}
 	for _, s := range blocked {
 		if err := checkBlocklist(s); err == nil {
@@ -53,6 +56,7 @@ func TestRewritePredicateParams(t *testing.T) {
 		{"type = $1", 1, "type = $2"},
 		{"a = $1 AND b = $2 AND c = $3", 3, "a = $4 AND b = $5 AND c = $6"},
 		{"height > 10 AND score < 100", 0, "height > 10 AND score < 100"},
+		{"a = $10 AND b = $11", 5, "a = $15 AND b = $16"},
 	}
 	for _, c := range cases {
 		got := rewritePredicateParams(c.where, c.offset)
