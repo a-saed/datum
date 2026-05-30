@@ -160,6 +160,11 @@ export function Map({ onStatusChange }: Props) {
         setFeaturesClient(fc)
         setWaypointsClient(wc)
         onStatusChangeRef.current({ phase: 'ready', text: 'Click the map to add a point' })
+
+        if (import.meta.env.DEV) {
+          const { initDatumDevtools } = await import('datum-sync/devtools')
+          initDatumDevtools([fc, wc])
+        }
       } catch (err) {
         onStatusChangeRef.current({ phase: 'error', text: String(err) })
       }
