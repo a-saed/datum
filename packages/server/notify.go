@@ -69,10 +69,14 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			continue
 		}
 
-		geomStr, _ := feature["geom"].(string)
-		geomBbox := extractBbox(geomStr)
+		// Extract geom bbox only for spatial tables.
+		var geomBbox [4]float64
+		if ts.isSpatial {
+			geomStr, _ := feature["geom"].(string)
+			geomBbox = extractBbox(geomStr)
+		}
 
-		// Extract feature ID for predicate matching.
+		// Extract feature ID for predicate and RLS matching.
 		var featureID string
 		for _, col := range ts.columns {
 			if col.Role == "id" {
@@ -83,7 +87,8 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			}
 		}
 
-		// Pass 1: collect bbox-matching clients under a brief read lock (no DB calls).
+		// Pass 1: collect candidates under a brief read lock.
+		// Spatial: check bbox intersection. Non-spatial: include all subscribers.
 		type candidate struct {
 			client *wsClient
 			id     string
@@ -94,7 +99,11 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			if id == payload.OriginClientID {
 				continue
 			}
-			if bboxesIntersect(c.bbox, geomBbox) {
+			if ts.isSpatial {
+				if bboxesIntersect(c.bbox, geomBbox) {
+					candidates = append(candidates, candidate{c, id})
+				}
+			} else {
 				candidates = append(candidates, candidate{c, id})
 			}
 		}
