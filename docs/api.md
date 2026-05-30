@@ -34,6 +34,37 @@ const db = await DatumClient.connect({
 | `connectTimeout` | `number` (ms) | `30000` | How long to wait for the initial snapshot before rejecting `connect()`. Set to `0` to disable. |
 | `onStatusChange` | `(status: ConnectionStatus) => void` | — | Called whenever the connection transitions between `'connecting'`, `'connected'`, and `'disconnected'`. |
 | `token` | `string \| () => Promise<string>` | — | JWT for server authentication. Pass a function for automatic refresh before expiry. Required when datum-server has an `auth:` config block. |
+| `where` | `string` | — | SQL WHERE clause to filter the subscription server-side. Developer-written SQL — never interpolate end-user input directly. Use `whereParams` for user-derived values. Validated server-side via blocklist and `EXPLAIN` before any data flows. |
+| `whereParams` | `unknown[]` | — | Bound parameter values for `$1`, `$2`, … placeholders in `where`. Values go to Postgres as bound parameters — never interpolated into SQL. Safe for user-derived values. |
+
+**Filtering the subscription:**
+
+```ts
+// Developer-written predicate — literals are safe
+const db = await DatumClient.connect({
+  serverUrl,
+  bbox: [-122.5, 37.7, -122.4, 37.8],
+  where: "type = 'building' AND height > 10",
+})
+
+// User-derived values — use whereParams (bound parameters, injection-safe)
+const db = await DatumClient.connect({
+  serverUrl,
+  bbox,
+  where: "type = $1 AND score > $2",
+  whereParams: [userSelectedType, minScore],
+})
+
+// PostGIS operators work naturally
+const db = await DatumClient.connect({
+  serverUrl,
+  bbox,
+  where: "ST_DWithin(geom, ST_MakePoint($1, $2)::geography, $3)",
+  whereParams: [lng, lat, radiusMeters],
+})
+```
+
+> **Security:** `where` is validated server-side via a blocklist and `EXPLAIN` in a `READ ONLY` transaction before any data flows. Never interpolate end-user input directly into `where` — use `whereParams` instead.
 
 ---
 

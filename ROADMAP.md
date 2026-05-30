@@ -10,9 +10,6 @@
 ### Per-delta RLS check (`broadcast_rls_check`)
 Before pushing a delta to a client, datum runs a `SELECT 1` filtered through that client's RLS. Drops the delta if RLS blocks it — correct per-row visibility at the cost of one DB query per delta per recipient. Config key `auth.broadcast_rls_check: true` reserved.
 
-### Subscription predicates beyond bbox
-bbox is the only subscription filter today. Some use cases need arbitrary predicates — sync all features of type "building", sync features belonging to a project, etc. A WHERE clause on the subscribe message would cover most cases.
-
 ### Conflict resolution strategies
 Today datum uses last-write-wins based on `updated_at`. For collaborative editing, applications may need custom merge strategies or CRDT-based resolution. This likely needs to be an application-level hook rather than a built-in strategy.
 
@@ -20,6 +17,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Subscription predicates (v0.9.0)** — `where` and `whereParams` in `DatumClient.connect()` filter the sync subscription server-side. Any SQL expression works, including PostGIS operators. Three-layer security: keyword blocklist + `EXPLAIN` in a `READ ONLY` transaction + pgx bound parameters. Never interpolates user values into SQL.
 - **DevTools (v0.8.0)** — `datum-sync/devtools` adds a floating browser panel with a SQL REPL (full PostGIS), schema inspector, and live sync status. Activated by `initDatumDevtools(db)`. Toggle with `Ctrl+Shift+D`. Zero production bundle impact via dynamic import. Try it at the [live demo](https://a-saed.github.io/datum/demo/).
 - **Typed column support (v0.7.0)** — datum auto-introspects the server table at startup and mirrors the exact column structure in PGlite. Any columns beyond the 4 required ones (`id`, `geom`, `updated_at`, `properties`) are synced automatically and queryable with normal SQL on both sides — no extra configuration.
 - **Per-user authentication (v0.6.0)** — JWT auth (HS256/RS256/ES256). Token in `subscribe` message, all claims forwarded as `datum.<key>` Postgres session variables for RLS. Auto token refresh before expiry. Startup warning when connected as superuser. Fully opt-in.
