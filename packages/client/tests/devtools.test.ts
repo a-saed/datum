@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { postgis } from '@electric-sql/pglite-postgis'
 import { setupSchema } from '../src/pglite.js'
 import type { ColumnDef } from '../src/schema.js'
+import { normaliseClients } from '../src/devtools/registry.js'
 
 const BASE_COLS: ColumnDef[] = [
   { name: 'id',         pg_type: 'uuid',        role: 'id',         nullable: false },
@@ -44,5 +45,17 @@ describe('setupSchema return type', () => {
     const result = await setupSchema(db, 'features', EXTENDED_COLS)
     expect(result.wiped).toBe(true)
     expect(result.prevColumns).toEqual(BASE_COLS)
+  })
+})
+
+describe('normaliseClients', () => {
+  it('wraps a single client in an array', () => {
+    const fake = { tableName: 'features' } as any
+    expect(normaliseClients(fake)).toEqual([fake])
+  })
+
+  it('passes an array through unchanged', () => {
+    const fakes = [{ tableName: 'a' }, { tableName: 'b' }] as any[]
+    expect(normaliseClients(fakes)).toEqual(fakes)
   })
 })
