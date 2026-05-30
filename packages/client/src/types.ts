@@ -33,7 +33,7 @@ export interface SchemaChangeEvent {
 
 export interface DatumConfig {
   serverUrl:      string
-  bbox:           [number, number, number, number]
+  bbox?:          [number, number, number, number]   // required for spatial tables, omit for non-spatial
   table?:         string
   syncInterval?:  number
   dbName?:        string
@@ -59,7 +59,7 @@ export type Feature = Record<string, unknown> & {
 
 export interface SubscribeMessage {
   type:       'subscribe'
-  bbox:       [number, number, number, number]
+  bbox?:      [number, number, number, number]
   client_id:  string
   table?:     string
   since?:     string

@@ -242,7 +242,7 @@ export class DatumClient {
       // First visit (or reconnect before snapshot arrived): request full snapshot.
       sendMessage(this.ws, {
         type: 'subscribe',
-        bbox: this.config.bbox,
+        ...(this.config.bbox ? { bbox: this.config.bbox } : {}),
         client_id: this.clientId,
         ...(this.config.table ? { table: this.config.table } : {}),
         ...(token ? { token } : {}),
@@ -342,7 +342,7 @@ export class DatumClient {
     const token = await this.resolveToken()
     sendMessage(this.ws, {
       type:      'subscribe',
-      bbox:      this.config.bbox,
+      ...(this.config.bbox ? { bbox: this.config.bbox } : {}),
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       ...(token ? { token } : {}),
@@ -362,7 +362,7 @@ export class DatumClient {
     )
     sendMessage(this.ws, {
       type: 'subscribe',
-      bbox: this.config.bbox,
+      ...(this.config.bbox ? { bbox: this.config.bbox } : {}),
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       since: rows[0].since,
