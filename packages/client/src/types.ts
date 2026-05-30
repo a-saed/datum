@@ -40,6 +40,8 @@ export interface DatumConfig {
   connectTimeout?: number
   onStatusChange?: (status: ConnectionStatus) => void
   onSchemaChange?: (event: SchemaChangeEvent) => void
+  where?:       string      // SQL WHERE clause template (developer-written)
+  whereParams?: unknown[]   // Bound values for $1, $2, ... (never interpolated into SQL)
   token?:         string | (() => Promise<string>)
 }
 
@@ -62,6 +64,8 @@ export interface SubscribeMessage {
   table?:     string
   since?:     string
   token?:     string
+  where?:        string
+  where_params?: unknown[]
 }
 
 export interface AuthMessage {

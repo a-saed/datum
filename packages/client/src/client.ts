@@ -201,6 +201,8 @@ export class DatumClient {
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       ...(token ? { token } : {}),
+      ...(this.config.where                       ? { where:        this.config.where }        : {}),
+      ...(this.config.whereParams?.length         ? { where_params: this.config.whereParams }  : {}),
     })
     if (token) this.scheduleTokenRefresh(token)
   }
@@ -244,6 +246,8 @@ export class DatumClient {
         client_id: this.clientId,
         ...(this.config.table ? { table: this.config.table } : {}),
         ...(token ? { token } : {}),
+        ...(this.config.where                       ? { where:        this.config.where }        : {}),
+        ...(this.config.whereParams?.length         ? { where_params: this.config.whereParams }  : {}),
       })
       if (token) this.scheduleTokenRefresh(token)
       // resolveReady is called after the snapshot is loaded (in handleMessage).
@@ -342,6 +346,8 @@ export class DatumClient {
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       ...(token ? { token } : {}),
+      ...(this.config.where                       ? { where:        this.config.where }        : {}),
+      ...(this.config.whereParams?.length         ? { where_params: this.config.whereParams }  : {}),
       // No 'since' — full snapshot
     })
     if (token) this.scheduleTokenRefresh(token)
@@ -361,6 +367,8 @@ export class DatumClient {
       ...(this.config.table ? { table: this.config.table } : {}),
       since: rows[0].since,
       ...(token ? { token } : {}),
+      ...(this.config.where                       ? { where:        this.config.where }        : {}),
+      ...(this.config.whereParams?.length         ? { where_params: this.config.whereParams }  : {}),
     })
     if (token) this.scheduleTokenRefresh(token)
   }
