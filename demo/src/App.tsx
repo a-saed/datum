@@ -16,13 +16,11 @@ const DOT_COLOR: Record<StatusPhase, string> = {
 // A datum in surveying is the precise reference point everything is measured from.
 function DatumIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <circle cx="9" cy="9" r="7" stroke="#2563eb" strokeWidth="1.8" />
-      <line x1="9" y1="1"    x2="9" y2="4"    stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="9" y1="14"   x2="9" y2="17"   stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="1"   y1="9"  x2="4"   y2="9"  stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="14"  y1="9"  x2="17"  y2="9"  stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="9" cy="9" r="2.2" fill="#2563eb" />
+    <svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <polyline points="17,10 6,24 17,38" stroke="#2563eb" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="31,10 42,24 31,38" stroke="#2563eb" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="24" cy="24" r="8" stroke="#2563eb" strokeWidth="1.5" fill="none" opacity="0.5" />
+      <circle cx="24" cy="24" r="3.5" fill="#2563eb" />
     </svg>
   )
 }
