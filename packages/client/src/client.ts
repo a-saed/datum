@@ -282,7 +282,11 @@ export class DatumClient {
       const columns = this._columns
       const { wiped: wasRecreated, prevColumns } = await setupSchema(this.db, this._tableName, columns)
       if (wasRecreated) {
-        this.config.onSchemaChange?.({ prev: prevColumns, next: columns })
+        try {
+          this.config.onSchemaChange?.({ prev: prevColumns, next: columns })
+        } catch (e) {
+          console.error('datum: onSchemaChange callback threw', e)
+        }
       }
 
       if (wasRecreated && !this.needsSnapshot) {

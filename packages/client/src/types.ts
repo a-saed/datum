@@ -1,4 +1,5 @@
 // packages/client/src/types.ts
+import type { ColumnDef } from './schema.js'
 export type { ColumnDef } from './schema.js'
 
 /** Geographic bounding box in WGS-84 (EPSG:4326). */
@@ -26,8 +27,8 @@ export interface ChangeEvent {
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
 export interface SchemaChangeEvent {
-  prev: import('./schema.js').ColumnDef[] | null
-  next: import('./schema.js').ColumnDef[]
+  prev: ColumnDef[] | null
+  next: ColumnDef[]
 }
 
 export interface DatumConfig {
