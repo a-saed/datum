@@ -60,6 +60,7 @@ export class DatumClient {
   private inFlight = new Set<string>()
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private _columns: ColumnDef[] | null = null
+  private _schemaChangeListeners: Array<(event: import('./types.js').SchemaChangeEvent) => void> = []
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
   private static readonly TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
@@ -128,6 +129,17 @@ export class DatumClient {
   /** The current column definitions received from the server, or null before the first schema message. */
   get columns(): ColumnDef[] | null {
     return this._columns
+  }
+
+  /**
+   * Subscribe to schema changes (local DB wiped due to server schema change).
+   * Returns an unsubscribe function. Can be called after connect().
+   */
+  onSchemaChange(cb: (event: import('./types.js').SchemaChangeEvent) => void): () => void {
+    this._schemaChangeListeners.push(cb)
+    return () => {
+      this._schemaChangeListeners = this._schemaChangeListeners.filter(l => l !== cb)
+    }
   }
 
   /**
@@ -282,10 +294,14 @@ export class DatumClient {
       const columns = this._columns
       const { wiped: wasRecreated, prevColumns } = await setupSchema(this.db, this._tableName, columns)
       if (wasRecreated) {
+        const event = { prev: prevColumns, next: columns }
         try {
-          this.config.onSchemaChange?.({ prev: prevColumns, next: columns })
+          this.config.onSchemaChange?.(event)
         } catch (e) {
           console.error('datum: onSchemaChange callback threw', e)
+        }
+        for (const listener of this._schemaChangeListeners) {
+          try { listener(event) } catch (e) { console.error('datum: onSchemaChange listener threw', e) }
         }
       }
 

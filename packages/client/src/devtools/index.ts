@@ -29,6 +29,13 @@ export function initDatumDevtools(input: DatumClient | DatumClient[]): void {
   // Note: this only captures changes that happen AFTER initDatumDevtools is called.
   const schemaChanges = new Map<string, SchemaChange>()
 
+  // Subscribe to schema changes for each client so the Status tab can show diffs.
+  for (const client of clients) {
+    client.onSchemaChange(({ prev, next }) => {
+      schemaChanges.set(client.tableName, { prev, next, time: new Date() })
+    })
+  }
+
   const panel = createPanel(clients)
 
   // Create the three tab panel elements

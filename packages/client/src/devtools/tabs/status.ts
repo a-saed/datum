@@ -13,6 +13,9 @@ export function mountStatusTab(
   getClient: () => DatumClient,
   schemaChange: SchemaChange | null,
 ): void {
+  const prev = (container as any).__dtStatusInterval as ReturnType<typeof setInterval> | undefined
+  if (prev !== undefined) clearInterval(prev)
+
   container.innerHTML = `
     <div class="datum-dt-stat-grid">
       <div class="datum-dt-stat-cell" id="datum-dt-s-conn">
@@ -103,14 +106,7 @@ export function mountStatusTab(
 
   update()
   const interval = setInterval(update, 1000)
-
-  const observer = new MutationObserver(() => {
-    if (!document.contains(container)) {
-      clearInterval(interval)
-      observer.disconnect()
-    }
-  })
-  observer.observe(document.body, { childList: true, subtree: true })
+  ;(container as any).__dtStatusInterval = interval
 }
 
 function formatRelTime(d: Date): string {
