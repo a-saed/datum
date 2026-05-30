@@ -150,8 +150,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("datum-server: introspect schema for table %q: %v", ts.name, err)
 		}
-		if _, err := validateColumns(ts.name, columns); err != nil {
+		isSpatial, err := validateColumns(ts.name, columns)
+		if err != nil {
 			log.Fatalf("%v", err)
+		}
+		ts.isSpatial = isSpatial
+		if !isSpatial {
+			log.Printf("datum-server: table %q: non-spatial mode (no geometry column)", ts.name)
 		}
 
 		if err := installTrigger(ctx, pool, ts.name, columns); err != nil {

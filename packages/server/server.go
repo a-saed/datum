@@ -31,6 +31,7 @@ type tableState struct {
 	cols      ColumnConfig
 	columns   []ColumnDef // introspected at startup, immutable after init
 	schemaMsg []byte      // pre-serialised SchemaMessage, sent as-is
+	isSpatial bool        // true if table has a geometry column
 	clients   map[string]*wsClient
 	mu        sync.RWMutex
 }
@@ -260,7 +261,23 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 			client.id    = msg.ClientID
 			client.table = ts.name
-			client.bbox  = msg.BBox
+			// Validate bbox based on table's spatial mode.
+			if ts.isSpatial && msg.BBox == nil {
+				log.Printf("datum-server: client %s: spatial table %q requires a bbox", msg.ClientID, ts.name)
+				_ = conn.WriteControl(
+					websocket.CloseMessage,
+					websocket.FormatCloseMessage(4400, "spatial table requires a bbox"),
+					time.Now().Add(time.Second),
+				)
+				close(client.send)
+				return
+			}
+			if !ts.isSpatial && msg.BBox != nil {
+				log.Printf("datum-server: client %s: bbox ignored for non-spatial table %q", msg.ClientID, ts.name)
+			}
+			if msg.BBox != nil {
+				client.bbox = *msg.BBox
+			}
 			// Validate and store predicate if provided.
 			if msg.Where != "" {
 				if err := validatePredicate(r.Context(), s.pool, ts.name, msg.Where, msg.WhereParams); err != nil {
