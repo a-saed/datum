@@ -2,9 +2,6 @@
 
 ## Medium priority
 
-### Non-spatial tables
-datum currently requires a PostGIS geometry column on every synced table. Removing this constraint would allow syncing any Postgres table — `users`, `messages`, `projects`, etc. — using the same local-first sync primitives. For tables without geometry, bbox subscriptions are skipped and `where` predicates become the primary filter. Fully backwards compatible — existing spatial tables are unaffected.
-
 ### Webhook auth mode
 `auth.mode: webhook` — datum calls your app's endpoint to verify opaque tokens (session cookies, API keys) or perform real-time revocation checks. Config key `auth.webhook_url` reserved. JWT mode covers most cases.
 
@@ -15,6 +12,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Non-spatial tables (v0.11.0)** — tables without a PostGIS geometry column are now supported. Omit `bbox` in `DatumClient.connect()` to sync any Postgres table. `where` predicates scope the subscription. All features (typed columns, devtools, JWT auth, RLS, subscription predicates) work identically.
 - **Per-delta RLS check (v0.10.0)** — when JWT auth is configured, datum verifies RLS policies before broadcasting each delta to an authenticated client. Mid-session access revocations are enforced automatically. Fail-open on DB errors. No configuration required.
 - **Subscription predicates (v0.9.0)** — `where` and `whereParams` in `DatumClient.connect()` filter the sync subscription server-side. Any SQL expression works, including PostGIS operators. Three-layer security: keyword blocklist + `EXPLAIN` in a `READ ONLY` transaction + pgx bound parameters. Never interpolates user values into SQL.
 - **DevTools (v0.8.0)** — `datum-sync/devtools` adds a floating browser panel with a SQL REPL (full PostGIS), schema inspector, and live sync status. Activated by `initDatumDevtools(db)`. Toggle with `Ctrl+Shift+D`. Zero production bundle impact via dynamic import. Try it at the [live demo](https://a-saed.github.io/datum/demo/).

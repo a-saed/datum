@@ -27,7 +27,7 @@ const db = await DatumClient.connect({
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `serverUrl` | `string` | — | WebSocket URL of datum-server |
-| `bbox` | `[minX, minY, maxX, maxY]` | — | Bounding box in WGS-84. Only features intersecting this box are synced. |
+| `bbox` | `[minX, minY, maxX, maxY]` | — | Bounding box in WGS-84. Required for spatial tables (tables with a PostGIS geometry column). Omit for non-spatial tables — datum syncs all rows (filtered by `where` if provided). |
 | `table` | `string` | — | Server-side table name. Required when datum-server is configured with multiple tables; omit for single-table setups. |
 | `syncInterval` | `number` (ms) | `5000` | How often local writes are pushed to the server. |
 | `dbName` | `string` | `table` or `"datum"` | IndexedDB database name. Defaults to `table` when set, so each table gets its own database automatically. Override when you need explicit control. |
@@ -61,6 +61,14 @@ const db = await DatumClient.connect({
   bbox,
   where: "ST_DWithin(geom, ST_MakePoint($1, $2)::geography, $3)",
   whereParams: [lng, lat, radiusMeters],
+})
+
+// Non-spatial table — no bbox needed, where predicate scopes the subscription
+const db = await DatumClient.connect({
+  serverUrl,
+  table: 'messages',
+  where: "project_id = $1",
+  whereParams: [projectId],
 })
 ```
 
@@ -570,6 +578,19 @@ datum-server creates the table if it does not exist. If you are bringing an **ex
 - **properties** — optional free-form JSONB for additional attributes. If present, it coexists with typed columns.
 - **typed columns** — any additional columns (`name TEXT`, `height FLOAT8`, `score INT`, etc.) are automatically synced. datum introspects the table at startup and mirrors the exact schema in PGlite. Users query typed columns with normal SQL on both sides.
 - **updated_at** — last-write-wins conflict resolution is based on this column. Always set it to `now()` on insert/update.
+
+### Non-spatial tables
+
+Tables without a geometry column are supported. The two required columns are `id` (UUID) and `updated_at` (TIMESTAMPTZ). Any additional columns are synced automatically via schema cloning.
+
+```yaml
+# datum.yaml — mixing spatial and non-spatial tables
+tables:
+  - name: features   # spatial (has geom column) — requires bbox
+  - name: messages   # non-spatial — sync all rows, filter with where
+```
+
+Non-spatial tables receive real-time deltas, typed column support, devtools, JWT auth, RLS checks, and subscription predicates — everything works identically. The only difference is no bbox filtering.
 
 datum-server installs a spatial index on the geometry column and attaches the `datum_notify_change` trigger to the table.
 
