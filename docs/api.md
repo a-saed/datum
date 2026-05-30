@@ -380,6 +380,12 @@ const parcelsDb = await DatumClient.connect({
 })
 ```
 
+### Per-delta RLS enforcement
+
+When `auth:` is configured, datum automatically verifies RLS policies before broadcasting each delta to an authenticated client. If a client loses access to a row mid-session (role change, policy update, resource revocation), future deltas for that row are silently dropped for that client. No configuration required — this runs automatically whenever auth is enabled.
+
+> **Note:** Delete deltas are always forwarded — the deleted row can no longer be queried through RLS, so datum conservatively sends the delete notification to let clients clean up their local state.
+
 Run with:
 
 ```bash

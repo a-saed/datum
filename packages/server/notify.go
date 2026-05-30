@@ -112,6 +112,19 @@ func listenForNotifications(ctx context.Context, s *server) error {
 					continue
 				}
 			}
+
+			// Pass 3: RLS check — only when auth is configured, client is authenticated,
+			// and this is not a delete (deleted rows can't be queried through RLS).
+			if s.verifier != nil && cand.client.claims != nil && payload.Op != "delete" {
+				allowed, rlsErr := checkRLSAccess(ctx, s.pool, ts, featureID, cand.client.claims)
+				if rlsErr != nil {
+					log.Printf("datum-server: RLS check error for client %s: %v", cand.id, rlsErr)
+					// fail-open: send the delta despite the error
+				} else if !allowed {
+					continue
+				}
+			}
+
 			select {
 			case cand.client.send <- msg:
 			default:
