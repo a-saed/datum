@@ -2,7 +2,8 @@
 
 ## Medium priority
 
-
+### Non-spatial tables
+datum currently requires a PostGIS geometry column on every synced table. Removing this constraint would allow syncing any Postgres table — `users`, `messages`, `projects`, etc. — using the same local-first sync primitives. For tables without geometry, bbox subscriptions are skipped and `where` predicates become the primary filter. Fully backwards compatible — existing spatial tables are unaffected.
 
 ### Webhook auth mode
 `auth.mode: webhook` — datum calls your app's endpoint to verify opaque tokens (session cookies, API keys) or perform real-time revocation checks. Config key `auth.webhook_url` reserved. JWT mode covers most cases.
