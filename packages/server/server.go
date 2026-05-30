@@ -65,12 +65,14 @@ func (ts *tableState) broadcast(msg []byte, originClientID string, geomBbox [4]f
 }
 
 type wsClient struct {
-	id     string
-	table  string // which table this client is subscribed to
-	bbox   [4]float64
-	send   chan []byte
-	conn   *websocket.Conn
-	claims map[string]any // nil when auth not configured
+	id          string
+	table       string // which table this client is subscribed to
+	bbox        [4]float64
+	send        chan []byte
+	conn        *websocket.Conn
+	claims      map[string]any // nil when auth not configured
+	where       string         // validated WHERE clause; empty means no predicate
+	whereParams []any          // bound parameter values for $n placeholders
 }
 
 type ipLimiter struct {
@@ -259,6 +261,21 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			client.id    = msg.ClientID
 			client.table = ts.name
 			client.bbox  = msg.BBox
+			// Validate and store predicate if provided.
+			if msg.Where != "" {
+				if err := validatePredicate(r.Context(), s.pool, ts.name, msg.Where, msg.WhereParams); err != nil {
+					log.Printf("datum-server: invalid predicate from %s: %v", msg.ClientID, err)
+					_ = conn.WriteControl(
+						websocket.CloseMessage,
+						websocket.FormatCloseMessage(4400, "invalid predicate"),
+						time.Now().Add(time.Second),
+					)
+					close(client.send)
+					return
+				}
+			}
+			client.where       = msg.Where
+			client.whereParams = msg.WhereParams
 			ts.addClient(client)
 
 			// Send schema once per connection — not on bbox updates (setBbox).

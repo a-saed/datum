@@ -19,12 +19,14 @@ type Feature = map[string]any
 // Wire protocol — client → server
 
 type SubscribeMessage struct {
-	Type     string     `json:"type"`
-	Table    string     `json:"table,omitempty"`
-	BBox     [4]float64 `json:"bbox"`
-	ClientID string     `json:"client_id"`
-	Since    string     `json:"since,omitempty"`
-	Token    string     `json:"token,omitempty"`
+	Type        string     `json:"type"`
+	Table       string     `json:"table,omitempty"`
+	BBox        [4]float64 `json:"bbox"`
+	ClientID    string     `json:"client_id"`
+	Since       string     `json:"since,omitempty"`
+	Token       string     `json:"token,omitempty"`
+	Where       string     `json:"where,omitempty"`
+	WhereParams []any      `json:"where_params,omitempty"`
 }
 
 type AuthMessage struct {
