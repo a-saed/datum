@@ -106,37 +106,35 @@ func introspectSchema(ctx context.Context, pool *pgxpool.Pool, tableName string,
 	return defs, nil
 }
 
-// validateColumns checks that the required columns (id UUID, geom geometry,
-// updated_at timestamptz) are present. Returns a fatal-quality error if missing.
-func validateColumns(tableName string, cols []ColumnDef) error {
+// validateColumns checks that the required columns (id UUID, updated_at timestamptz) are present.
+// Returns (isSpatial, error) where isSpatial is true when a valid geometry column is present.
+// Missing geometry is not fatal — tables without geometry are synced in non-spatial mode.
+func validateColumns(tableName string, cols []ColumnDef) (bool, error) {
 	var hasID, hasGeom, hasUpdAt bool
 	for _, c := range cols {
 		switch c.Role {
 		case "id":
 			if c.PGType != "uuid" {
-				return fmt.Errorf("datum-server: table %q: id column %q must be uuid, got %s", tableName, c.Name, c.PGType)
+				return false, fmt.Errorf("datum-server: table %q: id column %q must be uuid, got %s", tableName, c.Name, c.PGType)
 			}
 			hasID = true
 		case "geom":
 			if c.PGType != "geometry" {
-				return fmt.Errorf("datum-server: table %q: geom column %q must be geometry, got %s", tableName, c.Name, c.PGType)
+				return false, fmt.Errorf("datum-server: table %q: geom column %q must be geometry, got %s", tableName, c.Name, c.PGType)
 			}
 			hasGeom = true
 		case "updated_at":
 			if c.PGType != "timestamptz" {
-				return fmt.Errorf("datum-server: table %q: updated_at column %q must be timestamptz, got %s", tableName, c.Name, c.PGType)
+				return false, fmt.Errorf("datum-server: table %q: updated_at column %q must be timestamptz, got %s", tableName, c.Name, c.PGType)
 			}
 			hasUpdAt = true
 		}
 	}
 	if !hasID {
-		return fmt.Errorf("datum-server: table %q is missing a UUID primary key column.\nSet col_id in datum.yaml to point to an existing UUID column.", tableName)
-	}
-	if !hasGeom {
-		return fmt.Errorf("datum-server: table %q is missing a geometry column.\nSet col_geom in datum.yaml to point to an existing PostGIS geometry column.", tableName)
+		return false, fmt.Errorf("datum-server: table %q is missing a UUID primary key column.\nSet col_id in datum.yaml to point to an existing UUID column.", tableName)
 	}
 	if !hasUpdAt {
-		return fmt.Errorf("datum-server: table %q is missing a timestamptz updated_at column.\nSet col_updated_at in datum.yaml to point to an existing TIMESTAMPTZ column.", tableName)
+		return false, fmt.Errorf("datum-server: table %q is missing a timestamptz updated_at column.\nSet col_updated_at in datum.yaml to point to an existing TIMESTAMPTZ column.", tableName)
 	}
-	return nil
+	return hasGeom, nil
 }

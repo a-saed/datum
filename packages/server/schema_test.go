@@ -29,7 +29,7 @@ func TestValidateColumns_AllPresent(t *testing.T) {
 		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
 		{Name: "name", PGType: "text", Role: "data", Nullable: true},
 	}
-	if err := validateColumns("t", cols); err != nil {
+	if _, err := validateColumns("t", cols); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -39,7 +39,7 @@ func TestValidateColumns_MissingID(t *testing.T) {
 		{Name: "geom", PGType: "geometry", Role: "geom"},
 		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
 	}
-	if err := validateColumns("t", cols); err == nil {
+	if _, err := validateColumns("t", cols); err == nil {
 		t.Error("expected error for missing id column")
 	}
 }
@@ -49,7 +49,7 @@ func TestValidateColumns_MissingGeom(t *testing.T) {
 		{Name: "id", PGType: "uuid", Role: "id"},
 		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
 	}
-	if err := validateColumns("t", cols); err == nil {
+	if _, err := validateColumns("t", cols); err == nil {
 		t.Error("expected error for missing geom column")
 	}
 }
@@ -59,7 +59,7 @@ func TestValidateColumns_MissingUpdatedAt(t *testing.T) {
 		{Name: "id", PGType: "uuid", Role: "id"},
 		{Name: "geom", PGType: "geometry", Role: "geom"},
 	}
-	if err := validateColumns("t", cols); err == nil {
+	if _, err := validateColumns("t", cols); err == nil {
 		t.Error("expected error for missing updated_at column")
 	}
 }
@@ -70,7 +70,7 @@ func TestValidateColumns_WrongIDType(t *testing.T) {
 		{Name: "geom", PGType: "geometry", Role: "geom"},
 		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
 	}
-	if err := validateColumns("t", cols); err == nil {
+	if _, err := validateColumns("t", cols); err == nil {
 		t.Error("expected error for non-uuid id")
 	}
 }
@@ -81,7 +81,7 @@ func TestValidateColumns_WrongGeomType(t *testing.T) {
 		{Name: "geom", PGType: "text", Role: "geom"}, // wrong
 		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
 	}
-	if err := validateColumns("t", cols); err == nil {
+	if _, err := validateColumns("t", cols); err == nil {
 		t.Error("expected error for non-geometry geom column")
 	}
 }
@@ -92,7 +92,37 @@ func TestValidateColumns_WrongUpdatedAtType(t *testing.T) {
 		{Name: "geom", PGType: "geometry", Role: "geom"},
 		{Name: "updated_at", PGType: "date", Role: "updated_at"}, // wrong
 	}
-	if err := validateColumns("t", cols); err == nil {
+	if _, err := validateColumns("t", cols); err == nil {
 		t.Error("expected error for non-timestamptz updated_at column")
+	}
+}
+
+func TestValidateColumns_NonSpatial(t *testing.T) {
+	cols := []ColumnDef{
+		{Name: "id",         PGType: "uuid",        Role: "id"},
+		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
+		{Name: "name",       PGType: "text",        Role: "data", Nullable: true},
+	}
+	isSpatial, err := validateColumns("messages", cols)
+	if err != nil {
+		t.Errorf("unexpected error for non-spatial table: %v", err)
+	}
+	if isSpatial {
+		t.Error("expected isSpatial=false for table without geom column")
+	}
+}
+
+func TestValidateColumns_Spatial(t *testing.T) {
+	cols := []ColumnDef{
+		{Name: "id",         PGType: "uuid",        Role: "id"},
+		{Name: "geom",       PGType: "geometry",    Role: "geom"},
+		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
+	}
+	isSpatial, err := validateColumns("features", cols)
+	if err != nil {
+		t.Errorf("unexpected error for spatial table: %v", err)
+	}
+	if !isSpatial {
+		t.Error("expected isSpatial=true for table with geom column")
 	}
 }
