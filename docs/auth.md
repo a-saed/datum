@@ -97,12 +97,6 @@ If `token` is a function, datum reads the `exp` claim from the JWT and automatic
 - **Non-superuser role required.** Superusers bypass RLS silently.
 - **Static tokens don't expire mid-connection.** If `token` is a plain string, datum cannot refresh it — the token is verified once at connect time and reused for the lifetime of the connection. Use `token: () => yourAuth.getValidToken()` in production so datum can refresh automatically before expiry.
 
-## Known limitation: delta broadcast
-
-In this release, real-time delta messages are routed by bounding box only — not filtered by RLS. A delta for a feature in your bbox will be pushed to you even if an RLS policy would block you from seeing it in a snapshot query. The data arrives in the local PGlite database, but the next snapshot catch-up will reflect the correct RLS-filtered state.
-
-Per-delta RLS filtering (`auth.broadcast_rls_check`) is designed and on the roadmap.
-
 ## What datum does not own
 
 - **Token issuance** — use Auth0, Supabase Auth, your own backend, or any JWT library.

@@ -106,6 +106,24 @@ if (import.meta.env.DEV) {
 
 Press `Ctrl+Shift+D` to toggle the panel. Three tabs: **Query** (SQL REPL), **Schema** (column inspector), **Status** (sync state). No extra dependencies — included in `datum-sync`.
 
+## Non-spatial tables
+
+For tables without a PostGIS geometry column, omit `bbox` and filter with `where` predicates:
+
+```ts
+const db = await DatumClient.connect({
+  serverUrl: 'ws://your-server/ws',
+  table: 'messages',
+  where: "thread_id = $1",
+  whereParams: [threadId],
+  onStatusChange: (status) => console.log('datum:', status),
+})
+
+const messages = await db.query(`SELECT * FROM messages ORDER BY updated_at DESC`)
+```
+
+Non-spatial tables receive real-time deltas, typed column support, and all other datum features.
+
 ## Next steps
 
 - [How It Works](/how-it-works) — understand the local-first model, bbox subscriptions, and sync cycle

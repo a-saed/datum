@@ -18,8 +18,8 @@ hero:
 features:
   - title: Full PostGIS in WASM
     details: Spatial queries run locally in the browser — no network round-trip. ST_Area, ST_Intersects, spatial joins, everything PostGIS supports.
-  - title: Bbox live subscriptions
-    details: Declare a bounding box on connect. Only features that intersect your viewport are synced. Scales to large datasets with no extra config.
+  - title: Flexible subscriptions
+    details: Spatial tables use bounding box subscriptions — only features intersecting your viewport are synced. Non-spatial tables filter with SQL predicates. Both scale to large datasets with no extra config.
   - title: Fast reconnect
     details: PGlite persists to IndexedDB. Returning visits resolve in ~200ms with local data already queryable while delta catch-up runs in the background.
   - title: Per-user auth + RLS

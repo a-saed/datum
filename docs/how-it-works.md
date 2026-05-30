@@ -1,6 +1,6 @@
 # How It Works
 
-datum has five moving parts: a local PGlite database in the browser, a bounding box subscription model, a write outbox sync cycle, IndexedDB persistence for fast reconnect, and automatic reconnection with live status reporting.
+datum has five moving parts: a local PGlite database in the browser, a subscription model (bounding box for spatial tables, predicates for non-spatial), a write outbox sync cycle, IndexedDB persistence for fast reconnect, and automatic reconnection with live status reporting.
 
 ## Local-first model
 
@@ -44,6 +44,20 @@ DatumClient.connect({
 ```
 
 The predicate is validated via a blocklist and `EXPLAIN` in a `READ ONLY` transaction before any data flows. PostGIS operators like `ST_DWithin` work naturally.
+
+### Non-spatial subscriptions
+
+Tables without a geometry column don't use a bounding box. Omit `bbox` from `DatumClient.connect()` and the server syncs all rows, optionally scoped by a `where` predicate:
+
+```ts
+DatumClient.connect({
+  table: 'messages',
+  where: "status = 'active' AND user_id = $1",
+  whereParams: [userId],
+})
+```
+
+Real-time deltas, typed columns, devtools, JWT auth, and RLS all work identically to spatial tables.
 
 ## Sync cycle
 

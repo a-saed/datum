@@ -1,6 +1,6 @@
 # datum-sync
 
-Local-first spatial sync for PostGIS. A bounding box is a first-class live sync subscription.
+Local-first live sync for PostGIS. Spatial tables use bounding box subscriptions; all tables support flexible filtering via subscription predicates.
 
 ```ts
 import { DatumClient } from 'datum-sync'
