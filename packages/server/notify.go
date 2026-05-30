@@ -71,7 +71,53 @@ func listenForNotifications(ctx context.Context, s *server) error {
 
 		geomStr, _ := feature["geom"].(string)
 		geomBbox := extractBbox(geomStr)
-		ts.broadcast(msg, payload.OriginClientID, geomBbox)
+
+		// Extract feature ID for predicate matching.
+		var featureID string
+		for _, col := range ts.columns {
+			if col.Role == "id" {
+				if v, ok := feature[col.Name]; ok {
+					featureID, _ = v.(string)
+				}
+				break
+			}
+		}
+
+		// Pass 1: collect bbox-matching clients under a brief read lock (no DB calls).
+		type candidate struct {
+			client *wsClient
+			id     string
+		}
+		ts.mu.RLock()
+		var candidates []candidate
+		for id, c := range ts.clients {
+			if id == payload.OriginClientID {
+				continue
+			}
+			if bboxesIntersect(c.bbox, geomBbox) {
+				candidates = append(candidates, candidate{c, id})
+			}
+		}
+		ts.mu.RUnlock()
+
+		// Pass 2: predicate check outside the lock, then send.
+		for _, cand := range candidates {
+			if cand.client.where != "" {
+				matched, err := checkPredicateMatch(ctx, s.pool, ts, featureID, cand.client.where, cand.client.whereParams)
+				if err != nil {
+					log.Printf("datum-server: predicate check error for client %s: %v", cand.id, err)
+					continue
+				}
+				if !matched {
+					continue
+				}
+			}
+			select {
+			case cand.client.send <- msg:
+			default:
+				log.Printf("datum-server: client %s send buffer full, dropping delta", cand.id)
+			}
+		}
 	}
 }
 
