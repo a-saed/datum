@@ -78,6 +78,51 @@ func rewritePredicateParams(where string, offset int) string {
 	})
 }
 
+// checkRLSAccess returns true if the authenticated client's RLS policies permit
+// access to the given feature row. Fail-open: returns (true, nil) on any error
+// so transient DB failures do not silently drop deltas.
+func checkRLSAccess(ctx context.Context, pool *pgxpool.Pool, ts *tableState, featureID string, claims map[string]any) (bool, error) {
+	if len(claims) == 0 || featureID == "" {
+		return true, nil
+	}
+
+	var idColName string
+	for _, c := range ts.columns {
+		if c.Role == "id" {
+			idColName = c.Name
+			break
+		}
+	}
+	if idColName == "" {
+		return true, nil
+	}
+
+	table := pgx.Identifier{ts.name}.Sanitize()
+	idCol := pgx.Identifier{idColName}.Sanitize()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return true, fmt.Errorf("begin RLS check tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := setSessionClaims(ctx, tx, claims); err != nil {
+		return true, fmt.Errorf("set session claims for RLS check: %w", err)
+	}
+
+	sql := fmt.Sprintf(
+		`SELECT EXISTS(SELECT 1 FROM %s WHERE %s = $1::uuid)`,
+		table, idCol,
+	)
+
+	var exists bool
+	if err := tx.QueryRow(ctx, sql, featureID).Scan(&exists); err != nil {
+		return true, fmt.Errorf("RLS check query: %w", err)
+	}
+
+	return exists, nil
+}
+
 // checkPredicateMatch runs SELECT EXISTS to verify a feature matches a client's predicate.
 // Returns true if it matches, or if featureID/idColName is empty (fail-open).
 func checkPredicateMatch(ctx context.Context, pool *pgxpool.Pool, ts *tableState, featureID string, where string, whereParams []any) (bool, error) {

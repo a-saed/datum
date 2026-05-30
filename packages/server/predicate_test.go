@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 )
 
@@ -41,6 +42,44 @@ func TestCheckBlocklist(t *testing.T) {
 		if err := checkBlocklist(s); err == nil {
 			t.Errorf("expected %q to be blocked", s)
 		}
+	}
+}
+
+func TestCheckRLSAccess_FastPaths(t *testing.T) {
+	// nil claims → pass through (fail-open)
+	ok, err := checkRLSAccess(context.Background(), nil, &tableState{
+		name:    "t",
+		columns: []ColumnDef{{Name: "id", Role: "id"}},
+	}, "some-uuid", nil)
+	if err != nil {
+		t.Errorf("unexpected error with nil claims: %v", err)
+	}
+	if !ok {
+		t.Error("expected true with nil claims (fail-open)")
+	}
+
+	// empty featureID → pass through
+	ok2, err2 := checkRLSAccess(context.Background(), nil, &tableState{
+		name:    "t",
+		columns: []ColumnDef{{Name: "id", Role: "id"}},
+	}, "", map[string]any{"sub": "user1"})
+	if err2 != nil {
+		t.Errorf("unexpected error with empty featureID: %v", err2)
+	}
+	if !ok2 {
+		t.Error("expected true with empty featureID (fail-open)")
+	}
+
+	// no id column → pass through
+	ok3, err3 := checkRLSAccess(context.Background(), nil, &tableState{
+		name:    "t",
+		columns: []ColumnDef{{Name: "geom", Role: "geom"}},
+	}, "some-uuid", map[string]any{"sub": "user1"})
+	if err3 != nil {
+		t.Errorf("unexpected error with no id column: %v", err3)
+	}
+	if !ok3 {
+		t.Error("expected true with no id column (fail-open)")
 	}
 }
 
