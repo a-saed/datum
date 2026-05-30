@@ -9,6 +9,7 @@ import type {
   ColumnDef,
   ConnectionStatus,
   DatumConfig,
+  SchemaChangeEvent,
   ServerMessage,
   SchemaMessage,
   DeltaMessage,
@@ -45,7 +46,7 @@ export class DatumClient {
   private ws!: WebSocket
   private clientId: string
   private config: DatumConfig
-  private readonly tableName: string
+  private readonly _tableName: string
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private changeListeners = new Set<() => void>()
@@ -58,7 +59,7 @@ export class DatumClient {
   private resolveReady: (() => void) | null = null
   private inFlight = new Set<string>()
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
-  private columns: ColumnDef[] | null = null
+  private _columns: ColumnDef[] | null = null
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
   private static readonly TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
@@ -70,7 +71,7 @@ export class DatumClient {
     if (!DatumClient.TABLE_NAME_RE.test(tableName)) {
       throw new Error(`datum: invalid table name "${tableName}"`)
     }
-    this.tableName = tableName
+    this._tableName = tableName
     this.needsSnapshot = isFirstVisit
   }
 
@@ -117,6 +118,16 @@ export class DatumClient {
   /** Number of local writes waiting to be pushed to the server. */
   get pendingCount(): number {
     return this._pendingCount
+  }
+
+  /** The local table name used by this client (defaults to `'features'`). */
+  get tableName(): string {
+    return this._tableName
+  }
+
+  /** The current column definitions received from the server, or null before the first schema message. */
+  get columns(): ColumnDef[] | null {
+    return this._columns
   }
 
   /**
@@ -265,11 +276,14 @@ export class DatumClient {
 
   private async handleMessage(msg: ServerMessage): Promise<void> {
     if (msg.type === 'schema') {
-      this.columns = (msg as SchemaMessage).columns
+      this._columns = (msg as SchemaMessage).columns
     } else if (msg.type === 'snapshot') {
-      if (!this.columns) throw new Error('datum: received snapshot before schema message')
-      const columns = this.columns
-      const wasRecreated = await setupSchema(this.db, this.tableName, columns)
+      if (!this._columns) throw new Error('datum: received snapshot before schema message')
+      const columns = this._columns
+      const { wiped: wasRecreated, prevColumns } = await setupSchema(this.db, this._tableName, columns)
+      if (wasRecreated) {
+        this.config.onSchemaChange?.({ prev: prevColumns, next: columns })
+      }
 
       if (wasRecreated && !this.needsSnapshot) {
         // Schema changed on a returning visit — the snapshot was delta-filtered.
@@ -279,7 +293,7 @@ export class DatumClient {
         return
       }
 
-      await applyFeatures(this.db, msg.features, this.tableName, columns)
+      await applyFeatures(this.db, msg.features, this._tableName, columns)
       this.needsSnapshot = false
       this.setStatus('connected')
       this.resolveReady?.()
@@ -288,8 +302,8 @@ export class DatumClient {
       // Flush any pending writes immediately rather than waiting for the next tick.
       void this.pushOutbox()
     } else if (msg.type === 'delta') {
-      if (this.columns) {
-        await applyDelta(this.db, msg as DeltaMessage, this.tableName, this.columns)
+      if (this._columns) {
+        await applyDelta(this.db, msg as DeltaMessage, this._tableName, this._columns)
         this.notifyChange()
       }
     } else if (msg.type === 'ack') {
@@ -318,7 +332,7 @@ export class DatumClient {
       `SELECT COALESCE(
          to_char(MAX(updated_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
          '1970-01-01T00:00:00.000Z'
-       ) AS since FROM "${this.tableName}"`
+       ) AS since FROM "${this._tableName}"`
     )
     sendMessage(this.ws, {
       type: 'subscribe',

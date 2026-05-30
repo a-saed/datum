@@ -28,10 +28,12 @@ export async function bootLocalDb(dbName = 'datum', tableName = 'features'): Pro
 
 /**
  * Validate and (if needed) recreate the local schema using the server's column
- * definitions. Returns true if the DB was wiped (first visit or schema change).
+ * definitions. Returns { wiped, prevColumns } where wiped is true if the DB was
+ * wiped (first visit or schema change) and prevColumns holds the previous column
+ * definitions (null if nothing was stored before the wipe).
  * Exported for testing with in-memory PGlite instances.
  */
-export async function setupSchema(db: PGlite, tableName: string, columns: ColumnDef[]): Promise<boolean> {
+export async function setupSchema(db: PGlite, tableName: string, columns: ColumnDef[]): Promise<{ wiped: boolean; prevColumns: ColumnDef[] | null }> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_meta (
       key   TEXT PRIMARY KEY,
@@ -52,7 +54,20 @@ export async function setupSchema(db: PGlite, tableName: string, columns: Column
   const currentHash    = hRows[0]?.value
 
   if (currentVersion === SCHEMA_VERSION && currentHash === schemaHash) {
-    return false // schema is current — no wipe needed
+    return { wiped: false, prevColumns: null } // schema is current — no wipe needed
+  }
+
+  // Read existing schema_columns before wiping.
+  const { rows: cRows } = await db.query<{ value: string }>(
+    `SELECT value FROM _datum_meta WHERE key = 'schema_columns'`
+  )
+  let prevColumns: ColumnDef[] | null = null
+  if (cRows[0]?.value) {
+    try {
+      prevColumns = JSON.parse(cRows[0].value) as ColumnDef[]
+    } catch {
+      prevColumns = null
+    }
   }
 
   // Wipe and recreate.
@@ -86,12 +101,15 @@ export async function setupSchema(db: PGlite, tableName: string, columns: Column
   `)
 
   await db.query(
-    `INSERT INTO _datum_meta (key, value) VALUES ('schema_version', $1), ('schema_hash', $2)
+    `INSERT INTO _datum_meta (key, value) VALUES
+       ('schema_version', $1),
+       ('schema_hash', $2),
+       ('schema_columns', $3)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [SCHEMA_VERSION, schemaHash]
+    [SCHEMA_VERSION, schemaHash, JSON.stringify(columns)]
   )
 
-  return true
+  return { wiped: true, prevColumns }
 }
 
 function quote(name: string): string {

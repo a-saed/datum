@@ -25,6 +25,11 @@ export interface ChangeEvent {
 /** WebSocket connection state of a {@link DatumClient}. */
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
+export interface SchemaChangeEvent {
+  prev: import('./schema.js').ColumnDef[] | null
+  next: import('./schema.js').ColumnDef[]
+}
+
 export interface DatumConfig {
   serverUrl:      string
   bbox:           [number, number, number, number]
@@ -33,6 +38,7 @@ export interface DatumConfig {
   dbName?:        string
   connectTimeout?: number
   onStatusChange?: (status: ConnectionStatus) => void
+  onSchemaChange?: (event: SchemaChangeEvent) => void
   token?:         string | (() => Promise<string>)
 }
 

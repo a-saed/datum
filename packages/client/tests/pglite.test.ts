@@ -102,7 +102,7 @@ describe('setupSchema', () => {
 
   it('first call creates tables and returns true (wiped)', async () => {
     const d = await makeDb()
-    const wiped = await setupSchema(d, 'features', DEFAULT_COLUMNS)
+    const { wiped } = await setupSchema(d, 'features', DEFAULT_COLUMNS)
     expect(wiped).toBe(true)
     const { rows } = await d.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM features`
@@ -117,7 +117,7 @@ describe('setupSchema', () => {
       `INSERT INTO features (geom, properties, updated_at)
        VALUES (ST_SetSRID(ST_MakePoint(10, 20), 4326), '{}', now())`
     )
-    const wiped = await setupSchema(d, 'features', DEFAULT_COLUMNS)
+    const { wiped } = await setupSchema(d, 'features', DEFAULT_COLUMNS)
     expect(wiped).toBe(false)
   })
 
@@ -131,7 +131,7 @@ describe('setupSchema', () => {
     )
     await d.exec(`UPDATE _datum_meta SET value = '0' WHERE key = 'schema_version'`)
     // Re-run setup — should wipe features
-    const wiped = await setupSchema(d, 'features', DEFAULT_COLUMNS)
+    const { wiped } = await setupSchema(d, 'features', DEFAULT_COLUMNS)
     expect(wiped).toBe(true)
     const { rows } = await d.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM features`
@@ -149,7 +149,7 @@ describe('setupSchema', () => {
       `UPDATE _datum_meta SET value = 'badhash' WHERE key = 'schema_hash'`
     )
     // Should wipe and recreate
-    const wiped = await setupSchema(db, 'features', DEFAULT_COLUMNS)
+    const { wiped } = await setupSchema(db, 'features', DEFAULT_COLUMNS)
     expect(wiped).toBe(true)
   })
 
