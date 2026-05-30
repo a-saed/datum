@@ -45,21 +45,41 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 		}
 	}
 
-	query := fmt.Sprintf(
-		`SELECT %s FROM %s
-		 WHERE ST_Intersects(%s, ST_MakeEnvelope($1, $2, $3, $4, 4326))
-		 AND %s > $5`,
-		strings.Join(selects, ", "),
-		table, geomCol, updCol,
-	)
+	// After the loop, ensure updCol was found (required for all tables).
+	if updCol == "" {
+		return fmt.Errorf("sendSnapshot: tableState %q has no updated_at column", ts.name)
+	}
 
-	// Append predicate if the client has one.
-	// Existing params are $1–$5 (bbox×4 + since), so user's $n shifts by 5.
-	args := []any{bbox[0], bbox[1], bbox[2], bbox[3], sinceTime}
-	if client.where != "" {
-		rewritten := rewritePredicateParams(client.where, 5)
-		query = query + "\nAND (" + rewritten + ")"
-		args = append(args, client.whereParams...)
+	var query string
+	var args []any
+
+	if ts.isSpatial {
+		query = fmt.Sprintf(
+			`SELECT %s FROM %s
+			 WHERE ST_Intersects(%s, ST_MakeEnvelope($1, $2, $3, $4, 4326))
+			 AND %s > $5`,
+			strings.Join(selects, ", "),
+			table, geomCol, updCol,
+		)
+		args = []any{bbox[0], bbox[1], bbox[2], bbox[3], sinceTime}
+		if client.where != "" {
+			rewritten := rewritePredicateParams(client.where, 5)
+			query = query + "\nAND (" + rewritten + ")"
+			args = append(args, client.whereParams...)
+		}
+	} else {
+		query = fmt.Sprintf(
+			`SELECT %s FROM %s
+			 WHERE %s > $1`,
+			strings.Join(selects, ", "),
+			table, updCol,
+		)
+		args = []any{sinceTime}
+		if client.where != "" {
+			rewritten := rewritePredicateParams(client.where, 1)
+			query = query + "\nAND (" + rewritten + ")"
+			args = append(args, client.whereParams...)
+		}
 	}
 
 	// Use a transaction so SET LOCAL session vars apply to the snapshot query.
