@@ -11,6 +11,7 @@ packages/server/*.exe
 
 # Internal planning artifacts
 docs/superpowers/
+.superpowers/
 
 # Marketing content (articles, blogs, launch posts)
 marketing/
