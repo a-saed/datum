@@ -46,11 +46,15 @@ func TestValidateColumns_MissingID(t *testing.T) {
 
 func TestValidateColumns_MissingGeom(t *testing.T) {
 	cols := []ColumnDef{
-		{Name: "id", PGType: "uuid", Role: "id"},
+		{Name: "id",         PGType: "uuid",        Role: "id"},
 		{Name: "updated_at", PGType: "timestamptz", Role: "updated_at"},
 	}
-	if _, err := validateColumns("t", cols); err == nil {
-		t.Error("expected error for missing geom column")
+	isSpatial, err := validateColumns("t", cols)
+	if err != nil {
+		t.Errorf("unexpected error for missing geom (non-spatial mode): %v", err)
+	}
+	if isSpatial {
+		t.Error("expected isSpatial=false when geom column is absent")
 	}
 }
 

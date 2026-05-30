@@ -150,7 +150,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("datum-server: introspect schema for table %q: %v", ts.name, err)
 		}
-		if err := validateColumns(ts.name, columns); err != nil {
+		if _, err := validateColumns(ts.name, columns); err != nil {
 			log.Fatalf("%v", err)
 		}
 
