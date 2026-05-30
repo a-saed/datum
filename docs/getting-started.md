@@ -91,9 +91,24 @@ import { useDatum } from 'datum-sync/react'
 const { rows } = useDatum(db, `SELECT * FROM features`)
 ```
 
+## DevTools
+
+Add the datum devtools panel to inspect your local PGlite database while building:
+
+```ts
+const db = await DatumClient.connect({ serverUrl, bbox })
+
+if (import.meta.env.DEV) {
+  const { initDatumDevtools } = await import('datum-sync/devtools')
+  initDatumDevtools(db)
+}
+```
+
+Press `Ctrl+Shift+D` to toggle the panel. Three tabs: **Query** (SQL REPL), **Schema** (column inspector), **Status** (sync state). No extra dependencies — included in `datum-sync`.
+
 ## Next steps
 
 - [How It Works](/how-it-works) — understand the local-first model, bbox subscriptions, and sync cycle
-- [API Reference](/api) — full TypeScript client, React hooks, and server documentation
+- [API Reference](/api) — full TypeScript client, React hooks, devtools, and server documentation
 - [Authentication](/auth) — add per-user JWT auth and Postgres Row Level Security
 - [Self-Hosting](/self-hosting) — deploy to production (free-tier guide included)

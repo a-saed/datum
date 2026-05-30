@@ -228,6 +228,70 @@ function FeatureList() {
 
 ---
 
+## DevTools (`datum-sync/devtools`)
+
+A floating browser panel for inspecting the local PGlite database, schema, and sync state while building. Zero production bundle impact — loaded only when you import it.
+
+```ts
+import { initDatumDevtools } from 'datum-sync/devtools'
+```
+
+### `initDatumDevtools(client)`
+
+Injects the devtools panel into the page. Call once after `DatumClient.connect()`.
+
+```ts
+const db = await DatumClient.connect({ serverUrl, bbox })
+
+// Dev only — tree-shaken out of production builds when using dynamic import
+if (import.meta.env.DEV) {
+  const { initDatumDevtools } = await import('datum-sync/devtools')
+  initDatumDevtools(db)
+}
+```
+
+For multiple tables, pass an array — a dropdown appears in the toolbar to switch between clients:
+
+```ts
+initDatumDevtools([featuresDb, waypointsDb])
+```
+
+Calling `initDatumDevtools` more than once is a no-op (idempotent).
+
+**Toggle:** `Ctrl+Shift+D` (Windows/Linux) or `Cmd+Shift+D` (Mac). The panel remembers its open/closed state and height across page reloads via `localStorage`.
+
+### Tabs
+
+| Tab | What it shows |
+|---|---|
+| **Query** | SQL REPL against local PGlite. Full PostGIS available. `Cmd+Enter` to run. |
+| **Schema** | Every column from the server's schema message — name, type, role badge, nullable. Schema hash and "mirrored from server ✓" confirmation. |
+| **Status** | Connection state, pending write count, schema hash, schema version. When a schema wipe occurs, shows a diff of added/removed columns. |
+
+### `onSchemaChange` callback
+
+Called whenever the local DB is wiped and recreated (schema changed or first visit). Available in `DatumConfig` and as a post-connect subscription:
+
+```ts
+// In config (set at connect time):
+const db = await DatumClient.connect({
+  serverUrl,
+  bbox,
+  onSchemaChange: ({ prev, next }) => {
+    console.log('Schema changed — columns now:', next.map(c => c.name))
+  },
+})
+
+// Post-connect subscription (returns unsubscribe function):
+const unsub = db.onSchemaChange(({ prev, next }) => {
+  console.log('added columns:', next.filter(c => !prev?.find(p => p.name === c.name)))
+})
+```
+
+`prev` is `null` on first visit (no previous schema). `next` is the full column list after the wipe.
+
+---
+
 ## datum-server (Go binary)
 
 ### Config file
