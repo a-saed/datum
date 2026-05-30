@@ -22,6 +22,29 @@ On connect, the client sends a `subscribe` message declaring a bounding box. dat
 
 From that point on, the server only pushes delta messages to clients whose bounding box intersects the changed feature. A feature updated in San Francisco is never sent to a client subscribed to London. This keeps the wire protocol efficient regardless of total dataset size.
 
+### Subscription predicates
+
+Beyond the bbox, subscriptions can include an additional SQL WHERE clause to filter by any column:
+
+```ts
+DatumClient.connect({
+  bbox: [-122.5, 37.7, -122.4, 37.8],
+  where: "type = 'building' AND height > 10",
+})
+```
+
+The predicate is applied server-side to both the initial snapshot and real-time delta routing — clients only receive features that match. For user-derived values, use `whereParams` to pass bound parameters safely:
+
+```ts
+DatumClient.connect({
+  bbox,
+  where: "type = $1",
+  whereParams: [userSelectedType],
+})
+```
+
+The predicate is validated via a blocklist and `EXPLAIN` in a `READ ONLY` transaction before any data flows. PostGIS operators like `ST_DWithin` work naturally.
+
 ## Sync cycle
 
 The full write path:
