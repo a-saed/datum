@@ -53,6 +53,15 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 		table, geomCol, updCol,
 	)
 
+	// Append predicate if the client has one.
+	// Existing params are $1–$5 (bbox×4 + since), so user's $n shifts by 5.
+	args := []any{bbox[0], bbox[1], bbox[2], bbox[3], sinceTime}
+	if client.where != "" {
+		rewritten := rewritePredicateParams(client.where, 5)
+		query = query + "\nAND (" + rewritten + ")"
+		args = append(args, client.whereParams...)
+	}
+
 	// Use a transaction so SET LOCAL session vars apply to the snapshot query.
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -64,7 +73,7 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 		return err
 	}
 
-	rows, err := tx.Query(ctx, query, bbox[0], bbox[1], bbox[2], bbox[3], sinceTime)
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("snapshot query: %w", err)
 	}
