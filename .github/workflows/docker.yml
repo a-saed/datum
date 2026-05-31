@@ -21,17 +21,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract version
+        id: version
+        run: echo "tag=$(node -p "require('./packages/client/package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           file: packages/server/Dockerfile
           push: true
-          tags: ghcr.io/a-saed/datum-server:latest
+          tags: |
+            ghcr.io/a-saed/datum-server:latest
+            ghcr.io/a-saed/datum-server:${{ steps.version.outputs.tag }}
 
       - name: Deploy to Fly.io
         uses: superfly/flyctl-actions@1.5
         with:
-          args: deploy --image ghcr.io/a-saed/datum-server:latest
+          args: deploy --image ghcr.io/a-saed/datum-server:${{ steps.version.outputs.tag }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
