@@ -118,6 +118,24 @@ func listenForNotifications(ctx context.Context, s *server) error {
 					continue
 				}
 				if !matched {
+					// For updates: the feature was in the client's subscription but no longer matches.
+					// Send a synthetic delete so the client removes the stale row.
+					// For inserts: the row was never in the client's DB — nothing to remove.
+					if payload.Op == "update" {
+						gone := DeltaMessage{
+							Type:           "delta",
+							Op:             "delete",
+							Feature:        Feature{"id": featureID},
+							OriginClientID: payload.OriginClientID,
+						}
+						if goneMsg, err := json.Marshal(gone); err == nil {
+							select {
+							case cand.client.send <- goneMsg:
+							default:
+								log.Printf("datum-server: client %s send buffer full, dropping gone notification", cand.id)
+							}
+						}
+					}
 					continue
 				}
 			}
