@@ -10,6 +10,26 @@ export interface BBox {
   maxY: number
 }
 
+/** Tuple: [west, south, east, north] in WGS-84. */
+export type BboxArray = [number, number, number, number]
+
+/**
+ * A live source of bbox values. Returned by mapBbox().
+ * Implement this interface to connect any map library.
+ */
+export interface BboxSource {
+  /** Called once at connect to get the initial bbox. */
+  initial:   () => BboxArray
+  /**
+   * Called once at connect. Receives a callback to invoke whenever the bbox
+   * changes. Must return an unsubscribe function.
+   */
+  subscribe: (onChange: (bbox: BboxArray) => void) => () => void
+}
+
+/** bbox option: either a static array or a live source. */
+export type BboxLike = BboxArray | BboxSource
+
 /** The type of a local write operation captured by the outbox trigger. */
 export type ChangeOp = 'insert' | 'update' | 'delete'
 
@@ -33,7 +53,7 @@ export interface SchemaChangeEvent {
 
 export interface DatumConfig {
   serverUrl:      string
-  bbox?:          [number, number, number, number]   // required for spatial tables, omit for non-spatial
+  bbox?:          BboxLike  // static array OR live BboxSource (e.g. mapBbox(map))
   table?:         string
   syncInterval?:  number
   dbName?:        string
@@ -59,7 +79,7 @@ export type Feature = Record<string, unknown> & {
 
 export interface SubscribeMessage {
   type:       'subscribe'
-  bbox?:      [number, number, number, number]
+  bbox?:      BboxArray
   client_id:  string
   table?:     string
   since?:     string
