@@ -74,6 +74,8 @@ const db = await DatumClient.connect({
 
 > **Security:** `where` is validated server-side via a blocklist and `EXPLAIN` in a `READ ONLY` transaction before any data flows. Never interpolate end-user input directly into `where` — use `whereParams` instead.
 
+> **Gone notifications:** when a row is **updated** and the new state no longer matches the predicate, the server automatically sends a delete delta to affected clients — the stale row is removed from local PGlite immediately without requiring a reconnect.
+
 ---
 
 ### `db.query<T>(sql, params?)`
