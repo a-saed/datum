@@ -8,6 +8,9 @@ export default defineConfig({
   ignoreDeadLinks: [/localhost/],
   head: [['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }]],
   themeConfig: {
+    search: {
+      provider: 'local',
+    },
     logo: '/logo.svg',
     nav: [
       { text: 'Guide', link: '/getting-started' },
