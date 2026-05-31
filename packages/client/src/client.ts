@@ -61,6 +61,7 @@ export class DatumClient {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private _columns: ColumnDef[] | null = null
   private _schemaChangeListeners: Array<(event: import('./types.js').SchemaChangeEvent) => void> = []
+  private _bboxUnsub: (() => void) | null = null
   private static readonly MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
   private static readonly TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
@@ -76,6 +77,12 @@ export class DatumClient {
     this.needsSnapshot = isFirstVisit
   }
 
+  private initBboxSource(source: import('./types.js').BboxSource): void {
+    this._bboxUnsub = source.subscribe((newBbox) => {
+      this.setBbox(newBbox)
+    })
+  }
+
   /**
    * Connect to datum-server and load features into local PGlite.
    *
@@ -87,11 +94,27 @@ export class DatumClient {
    * initial snapshot arrives. Set `connectTimeout: 0` to disable.
    */
   static async connect(config: DatumConfig): Promise<DatumClient> {
-    const { db, isFirstVisit } = await bootLocalDb(config.dbName ?? config.table, config.table ?? 'features')
-    const clientId = uuidv4()
-    const client = new DatumClient(db, clientId, config, isFirstVisit)
+    // Resolve BboxLike → BboxArray at connect time.
+    let resolvedBbox: [number, number, number, number] | undefined
+    if (config.bbox) {
+      if (typeof (config.bbox as import('./types.js').BboxSource).subscribe === 'function') {
+        resolvedBbox = (config.bbox as import('./types.js').BboxSource).initial()
+      } else {
+        resolvedBbox = config.bbox as [number, number, number, number]
+      }
+    }
+    const resolvedConfig: import('./types.js').DatumConfig = { ...config, bbox: resolvedBbox }
 
-    const timeout = config.connectTimeout ?? 30_000
+    const { db, isFirstVisit } = await bootLocalDb(resolvedConfig.dbName ?? resolvedConfig.table, resolvedConfig.table ?? 'features')
+    const clientId = uuidv4()
+    const client = new DatumClient(db, clientId, resolvedConfig, isFirstVisit)
+
+    // Subscribe to live bbox changes if a BboxSource was provided.
+    if (config.bbox && typeof (config.bbox as import('./types.js').BboxSource).subscribe === 'function') {
+      client.initBboxSource(config.bbox as import('./types.js').BboxSource)
+    }
+
+    const timeout = resolvedConfig.connectTimeout ?? 30_000
     const ready = new Promise<void>((resolve, reject) => {
       const timer = timeout > 0
         ? setTimeout(() => {
@@ -216,6 +239,10 @@ export class DatumClient {
     if (this.syncTimer) clearInterval(this.syncTimer)
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    if (this._bboxUnsub) {
+      this._bboxUnsub()
+      this._bboxUnsub = null
+    }
     this.ws.close()
   }
 
@@ -242,7 +269,7 @@ export class DatumClient {
       // First visit (or reconnect before snapshot arrived): request full snapshot.
       sendMessage(this.ws, {
         type: 'subscribe',
-        ...(this.config.bbox ? { bbox: this.config.bbox } : {}),
+        ...(this.config.bbox ? { bbox: this.config.bbox as [number,number,number,number] } : {}),
         client_id: this.clientId,
         ...(this.config.table ? { table: this.config.table } : {}),
         ...(token ? { token } : {}),
@@ -342,7 +369,7 @@ export class DatumClient {
     const token = await this.resolveToken()
     sendMessage(this.ws, {
       type:      'subscribe',
-      ...(this.config.bbox ? { bbox: this.config.bbox } : {}),
+      ...(this.config.bbox ? { bbox: this.config.bbox as [number,number,number,number] } : {}),
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       ...(token ? { token } : {}),
@@ -362,7 +389,7 @@ export class DatumClient {
     )
     sendMessage(this.ws, {
       type: 'subscribe',
-      ...(this.config.bbox ? { bbox: this.config.bbox } : {}),
+      ...(this.config.bbox ? { bbox: this.config.bbox as [number,number,number,number] } : {}),
       client_id: this.clientId,
       ...(this.config.table ? { table: this.config.table } : {}),
       since: rows[0].since,
