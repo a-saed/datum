@@ -1,0 +1,1 @@
+import{c as i,Q as a,j as t,m as e}from"./chunks/framework.UrNQy43l.js";const c=JSON.parse('{"title":"Authentication","description":"","frontmatter":{},"headers":[],"relativePath":"auth.md","filePath":"auth.md"}'),n={name:"auth.md"};function h(l,s,p,k,r,o){return a(),t("div",null,[...s[0]||(s[0]=[e("",29)])])}const E=i(n,[["render",h]]);export{c as __pageData,E as default};
