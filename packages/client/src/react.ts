@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { DatumClient } from './client.js'
+import { mapBbox } from './bbox.js'
+import type { BboxSource } from './types.js'
 
 export function useDatum<T = Record<string, unknown>>(
   client: DatumClient | null,
@@ -46,4 +48,26 @@ export function useDatum<T = Record<string, unknown>>(
   }, [client, sql, serialisedParams])
 
   return { rows, loading, error }
+}
+
+/**
+ * Returns a stable BboxSource that tracks the given map's viewport.
+ * Works with MapLibre GL, Mapbox GL, and Leaflet out of the box.
+ * Pass as `bbox` to DatumClient.connect().
+ *
+ * @example
+ * const db = await DatumClient.connect({
+ *   serverUrl,
+ *   bbox: useMapBbox(mapRef.current),
+ * })
+ */
+export function useMapBbox(
+  map: any,
+  options?: Parameters<typeof mapBbox>[1]
+): BboxSource | undefined {
+  const sourceRef = useRef<BboxSource | undefined>(undefined)
+  if (map && !sourceRef.current) {
+    sourceRef.current = mapBbox(map, options)
+  }
+  return sourceRef.current
 }
