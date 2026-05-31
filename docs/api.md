@@ -91,7 +91,9 @@ const db = await DatumClient.connect({
 })
 ```
 
-Works out-of-the-box with **MapLibre GL, Mapbox GL, and Leaflet**. For other libraries, pass a custom extractor:
+Works out-of-the-box with **MapLibre GL, Mapbox GL, and Leaflet**. Call `mapBbox()` **after the map has loaded** — `getBounds()` must return valid coordinates.
+
+For other libraries, pass a custom extractor:
 
 ```ts
 // Google Maps
@@ -119,6 +121,8 @@ const db = await DatumClient.connect({
   bbox: useMapBbox(mapRef.current),  // stable ref, handles cleanup
 })
 ```
+
+> **Note:** `useMapBbox(map)` returns `undefined` when `map` is null/undefined. Make sure the map is loaded before calling `DatumClient.connect()` — connect with `bbox: undefined` treats the table as non-spatial and the live tracking will not activate.
 
 You can also implement `BboxSource` directly for GPS inputs, custom viewports, or any live data source:
 
@@ -173,20 +177,11 @@ await db.query(
 
 Updates the bounding box subscription without reconnecting. The server sends a fresh snapshot for the new area; features already in the local DB are merged in via `ON CONFLICT DO UPDATE`.
 
-Use this when the user pans or zooms the map.
-
 ```ts
 db.setBbox([-122.6, 37.6, -122.3, 37.9])
 ```
 
-In a map app, wire it to the `moveend` event:
-
-```ts
-map.on('moveend', () => {
-  const b = map.getBounds()
-  db.setBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])
-})
-```
+> **Tip:** For automatic viewport tracking use [`mapBbox(map)`](#mapbboxmap-options--live-bbox-tracking) instead — it wires `moveend` for you. `setBbox()` is for cases where you want manual control.
 
 ---
 
