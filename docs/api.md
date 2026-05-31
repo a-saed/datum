@@ -78,6 +78,62 @@ const db = await DatumClient.connect({
 
 ---
 
+### `mapBbox(map, options?)` — live bbox tracking
+
+Eliminates the viewport wiring boilerplate. Pass the result as `bbox` to `DatumClient.connect()` — datum auto-tracks map moves and calls `setBbox()` for you.
+
+```ts
+import { DatumClient, mapBbox } from 'datum-sync'
+
+const db = await DatumClient.connect({
+  serverUrl,
+  bbox: mapBbox(map),  // auto-tracks moveend — no setBbox needed
+})
+```
+
+Works out-of-the-box with **MapLibre GL, Mapbox GL, and Leaflet**. For other libraries, pass a custom extractor:
+
+```ts
+// Google Maps
+bbox: mapBbox(map, {
+  event: 'idle',
+  getBbox: m => {
+    const b = m.getBounds().toJSON()
+    return [b.west, b.south, b.east, b.north]
+  }
+})
+
+// OpenLayers (EPSG:4326 projection)
+bbox: mapBbox(map, {
+  getBbox: m => m.getView().calculateExtent(m.getSize())
+})
+```
+
+**In React**, use `useMapBbox` from `datum-sync/react`:
+
+```tsx
+import { useMapBbox } from 'datum-sync/react'
+
+const db = await DatumClient.connect({
+  serverUrl,
+  bbox: useMapBbox(mapRef.current),  // stable ref, handles cleanup
+})
+```
+
+You can also implement `BboxSource` directly for GPS inputs, custom viewports, or any live data source:
+
+```ts
+bbox: {
+  initial:   () => [west, south, east, north],
+  subscribe: (onChange) => {
+    const id = setInterval(() => onChange(getCurrentViewport()), 1000)
+    return () => clearInterval(id)
+  }
+}
+```
+
+---
+
 ### `db.query<T>(sql, params?)`
 
 Runs a SQL query against the local PGlite database. **No network involved.** Full PostGIS is available.

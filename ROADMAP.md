@@ -12,6 +12,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Live bbox tracking / `mapBbox()` (v0.12.0)** — eliminates map viewport wiring boilerplate. `bbox: mapBbox(map)` auto-tracks map moves for MapLibre, Mapbox GL, and Leaflet. Custom `event`/`getBbox` overrides for Google Maps, OpenLayers, and others. `useMapBbox(map)` React hook. Static `bbox` arrays still work unchanged.
 - **Gone notifications (v0.11.1)** — when a row is updated and no longer matches a client's `where` predicate, a synthetic delete delta is sent automatically. Stale rows are removed from local PGlite immediately without requiring a reconnect. Server-only patch.
 - **Non-spatial tables (v0.11.0)** — tables without a PostGIS geometry column are now supported. Omit `bbox` in `DatumClient.connect()` to sync any Postgres table. `where` predicates scope the subscription. All features (typed columns, devtools, JWT auth, RLS, subscription predicates) work identically.
 - **Per-delta RLS check (v0.10.0)** — when JWT auth is configured, datum verifies RLS policies before broadcasting each delta to an authenticated client. Mid-session access revocations are enforced automatically. Fail-open on DB errors. No configuration required.
