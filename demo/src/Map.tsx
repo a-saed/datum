@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection, Point } from 'geojson'
-import { DatumClient } from 'datum-sync'
+import { DatumClient, mapBbox } from 'datum-sync'
 import { useDatum } from 'datum-sync/react'
 import type { AppStatus } from './App.js'
 
@@ -134,15 +134,10 @@ export function Map({ onStatusChange }: Props) {
         })
       }
 
-      const bounds = map.getBounds()
-      const bbox: [number, number, number, number] = [
-        bounds.getWest(), bounds.getSouth(),
-        bounds.getEast(), bounds.getNorth(),
-      ]
-
       onStatusChangeRef.current({ phase: 'connecting', text: 'Connecting…' })
 
       const serverUrl = import.meta.env.VITE_DATUM_SERVER_URL ?? 'ws://localhost:3000/ws'
+      const liveBbox = mapBbox(map)
 
       const onConnStatus = (s: import('datum-sync').ConnectionStatus) => {
         if (s === 'disconnected') onStatusChangeRef.current({ phase: 'error', text: 'Disconnected — reconnecting…' })
@@ -152,8 +147,8 @@ export function Map({ onStatusChange }: Props) {
 
       try {
         const [fc, wc] = await Promise.all([
-          DatumClient.connect({ serverUrl, bbox, table: 'features',  onStatusChange: onConnStatus }),
-          DatumClient.connect({ serverUrl, bbox, table: 'waypoints', onStatusChange: onConnStatus }),
+          DatumClient.connect({ serverUrl, bbox: liveBbox, table: 'features',  onStatusChange: onConnStatus }),
+          DatumClient.connect({ serverUrl, bbox: liveBbox, table: 'waypoints', onStatusChange: onConnStatus }),
         ])
         featuresClientRef.current = fc
         waypointsClientRef.current = wc
@@ -166,13 +161,6 @@ export function Map({ onStatusChange }: Props) {
       } catch (err) {
         onStatusChangeRef.current({ phase: 'error', text: String(err) })
       }
-    })
-
-    map.on('moveend', () => {
-      const b = map.getBounds()
-      const bbox: [number, number, number, number] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
-      featuresClientRef.current?.setBbox(bbox)
-      waypointsClientRef.current?.setBbox(bbox)
     })
 
     map.on('click', (e) => {
