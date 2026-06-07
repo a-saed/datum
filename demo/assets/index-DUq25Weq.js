@@ -1,4 +1,4 @@
-function I(t){return Array.isArray(t)?t:[t]}const H=`
+function H(t){return Array.isArray(t)?t:[t]}const _=`
 #datum-devtools {
   position: fixed;
   bottom: 0;
@@ -256,15 +256,44 @@ function I(t){return Array.isArray(t)?t:[t]}const H=`
 .datum-dt-diff-row.r { background: #2e1a1a; color: #e06c75; }
 .datum-dt-diff-row.s { color: #444; }
 .datum-dt-notice-time { font-size: 10px; color: #444; margin-top: 5px; }
-`,N="datum-devtools:state",_=320;function B(){try{const t=localStorage.getItem(N);if(t)return JSON.parse(t)}catch{}return{open:!0,height:_}}function q(t){try{localStorage.setItem(N,JSON.stringify(t))}catch{}}const A=`<svg width="13" height="13" viewBox="0 0 48 48" fill="none">
+
+#datum-dt-fab {
+  display: none;
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #252525;
+  border: 1px solid rgba(37,99,235,0.35);
+  color: #2563eb;
+  cursor: pointer;
+  z-index: 999999;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.45);
+  padding: 0;
+}
+#datum-dt-fab.visible { display: flex; }
+#datum-dt-fab:hover { background: #2e2e2e; border-color: rgba(37,99,235,0.6); }
+
+@media (pointer: coarse) {
+  #datum-devtools-resize {
+    height: 16px;
+    top: -6px;
+  }
+  .datum-dt-kbd { display: none; }
+}
+`,I="datum-devtools:state",B=320;function A(){try{const t=localStorage.getItem(I);if(t)return JSON.parse(t)}catch{}return{open:!0,height:B}}function z(t){try{localStorage.setItem(I,JSON.stringify(t))}catch{}}const q=`<svg width="13" height="13" viewBox="0 0 48 48" fill="none">
   <polyline points="17,10 6,24 17,38" stroke="#2563eb" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
   <polyline points="31,10 42,24 31,38" stroke="#2563eb" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="24" cy="24" r="8" stroke="#2563eb" stroke-width="1.5" fill="none" opacity="0.5"/>
   <circle cx="24" cy="24" r="3.5" fill="#2563eb"/>
-</svg>`;function U(t){if(!document.getElementById("datum-devtools-css")){const a=document.createElement("style");a.id="datum-devtools-css",a.textContent=H,document.head.appendChild(a)}const e=B();let c=0,n="query";const u=[],o=document.createElement("div");o.id="datum-devtools",e.open||o.classList.add("hidden"),o.style.height=`${e.height}px`;const l=document.createElement("div");l.id="datum-devtools-resize",o.appendChild(l);const d=document.createElement("div");if(d.id="datum-dt-toolbar",d.innerHTML=`<div class="datum-dt-brand">${A} datum</div>`,t.length>1){const a=document.createElement("select");a.className="datum-dt-client-select",t.forEach((r,p)=>{const y=document.createElement("option");y.value=String(p),y.textContent=r.tableName,a.appendChild(y)}),a.addEventListener("change",()=>{c=Number(a.value),u.forEach(r=>r(n))}),d.appendChild(a)}const g=document.createElement("div");g.className="datum-dt-tabs",["Query","Schema","Status"].forEach(a=>{const r=document.createElement("div");r.className="datum-dt-tab"+(a.toLowerCase()===n?" active":""),r.textContent=a,r.addEventListener("click",()=>{document.querySelectorAll(".datum-dt-tab").forEach(p=>p.classList.remove("active")),r.classList.add("active"),n=a.toLowerCase(),u.forEach(p=>p(n))}),g.appendChild(r)}),d.appendChild(g);const x=document.createElement("div");x.className="datum-dt-right";const h=typeof navigator<"u"&&/mac/i.test(navigator.platform);x.innerHTML=`
+</svg>`;function U(t){if(!document.getElementById("datum-devtools-css")){const e=document.createElement("style");e.id="datum-devtools-css",e.textContent=_,document.head.appendChild(e)}const d=A();let u=0,i="query";const m=[],r=document.createElement("button");r.id="datum-dt-fab",r.title="Open datum devtools",r.innerHTML=q,r.addEventListener("click",()=>c()),document.body.appendChild(r);const o=document.createElement("div");o.id="datum-devtools",d.open||(o.classList.add("hidden"),r.classList.add("visible")),o.style.height=`${d.height}px`;const n=document.createElement("div");n.id="datum-devtools-resize",o.appendChild(n);const p=document.createElement("div");if(p.id="datum-dt-toolbar",p.innerHTML=`<div class="datum-dt-brand">${q} datum</div>`,t.length>1){const e=document.createElement("select");e.className="datum-dt-client-select",t.forEach((s,a)=>{const v=document.createElement("option");v.value=String(a),v.textContent=s.tableName,e.appendChild(v)}),e.addEventListener("change",()=>{u=Number(e.value),m.forEach(s=>s(i))}),p.appendChild(e)}const f=document.createElement("div");f.className="datum-dt-tabs",["Query","Schema","Status"].forEach(e=>{const s=document.createElement("div");s.className="datum-dt-tab"+(e.toLowerCase()===i?" active":""),s.textContent=e,s.addEventListener("click",()=>{document.querySelectorAll(".datum-dt-tab").forEach(a=>a.classList.remove("active")),s.classList.add("active"),i=e.toLowerCase(),m.forEach(a=>a(i))}),f.appendChild(s)}),p.appendChild(f);const g=document.createElement("div");g.className="datum-dt-right";const h=typeof navigator<"u"&&/mac/i.test(navigator.platform);g.innerHTML=`
     <span class="datum-dt-kbd">${h?"⌘":"Ctrl"}+Shift+D</span>
     <button class="datum-dt-close">✕</button>
-  `,x.querySelector(".datum-dt-close").addEventListener("click",()=>f()),d.appendChild(x),o.appendChild(d);const i=document.createElement("div");i.id="datum-dt-panels",i.style.cssText="flex:1;overflow:hidden;display:flex;flex-direction:column",o.appendChild(i),document.body.appendChild(o);function f(){const a=o.classList.toggle("hidden");e.open=!a,q({...e,open:e.open})}typeof document<"u"&&document.addEventListener("keydown",a=>{(h?a.metaKey:a.ctrlKey)&&a.shiftKey&&a.key==="D"&&(a.preventDefault(),f())});let m=0,v=0;return l.addEventListener("mousedown",a=>{m=a.clientY,v=o.getBoundingClientRect().height;const r=y=>{const s=m-y.clientY,S=Math.max(120,Math.min(window.innerHeight*.8,v+s));o.style.height=`${S}px`,e.height=S},p=()=>{q(e),document.removeEventListener("mousemove",r),document.removeEventListener("mouseup",p)};document.addEventListener("mousemove",r),document.addEventListener("mouseup",p)}),{root:o,tabPanels:i,getActiveClient:()=>t[c],onTabChange:a=>{u.push(a)}}}function T(t,e){t.innerHTML=`
+  `,g.querySelector(".datum-dt-close").addEventListener("click",()=>c()),p.appendChild(g),o.appendChild(p);const l=document.createElement("div");l.id="datum-dt-panels",l.style.cssText="flex:1;overflow:hidden;display:flex;flex-direction:column",o.appendChild(l),document.body.appendChild(o);function c(){const e=o.classList.toggle("hidden");r.classList.toggle("visible",e),d.open=!e,z({...d,open:d.open})}typeof document<"u"&&document.addEventListener("keydown",e=>{(h?e.metaKey:e.ctrlKey)&&e.shiftKey&&e.key==="D"&&(e.preventDefault(),c())});let b=0,y=0;function S(e){const s=b-e,a=Math.max(120,Math.min(window.innerHeight*.8,y+s));o.style.height=`${a}px`,d.height=a}return n.addEventListener("mousedown",e=>{b=e.clientY,y=o.getBoundingClientRect().height;const s=v=>S(v.clientY),a=()=>{z(d),document.removeEventListener("mousemove",s),document.removeEventListener("mouseup",a)};document.addEventListener("mousemove",s),document.addEventListener("mouseup",a)}),n.addEventListener("touchstart",e=>{e.preventDefault(),b=e.touches[0].clientY,y=o.getBoundingClientRect().height;const s=v=>S(v.touches[0].clientY),a=()=>{z(d),document.removeEventListener("touchmove",s),document.removeEventListener("touchend",a)};document.addEventListener("touchmove",s,{passive:!1}),document.addEventListener("touchend",a)},{passive:!1}),{root:o,tabPanels:l,getActiveClient:()=>t[u],onTabChange:e=>{m.push(e)}}}function F(t,d){t.innerHTML=`
     <div class="datum-dt-query-top">
       <textarea class="datum-dt-sql" spellcheck="false"></textarea>
       <div class="datum-dt-run-col">
@@ -274,28 +303,28 @@ function I(t){return Array.isArray(t)?t:[t]}const H=`
     </div>
     <div class="datum-dt-results"></div>
     <div class="datum-dt-results-bar">—</div>
-  `;const c=t.querySelector(".datum-dt-sql"),n=t.querySelector(".datum-dt-run"),u=t.querySelector(".datum-dt-results"),o=t.querySelector(".datum-dt-results-bar");c.value=`SELECT * FROM ${e().tableName} LIMIT 10`;async function l(){const d=c.value.trim();if(!d)return;c.classList.remove("error");const g=performance.now();try{const b=await e().query(d),x=Math.round(performance.now()-g),h=b.rows;if(h.length===0){u.innerHTML='<div style="padding:12px;color:#444;font-size:11px;font-family:sans-serif">No rows returned</div>',o.textContent=`0 rows · ${x}ms · local PGlite`;return}const i=Object.keys(h[0]),f=i.map(v=>`<th>${$(v)}</th>`).join(""),m=h.map(v=>`<tr>${i.map(r=>{const p=v[r];if(p==null)return'<td class="datum-dt-cell-null">null</td>';const y=typeof p=="object"?JSON.stringify(p):String(p);return`<td title="${$(y)}">${$(O(y,80))}</td>`}).join("")}</tr>`).join("");u.innerHTML=`
+  `;const u=t.querySelector(".datum-dt-sql"),i=t.querySelector(".datum-dt-run"),m=t.querySelector(".datum-dt-results"),r=t.querySelector(".datum-dt-results-bar");u.value=`SELECT * FROM ${d().tableName} LIMIT 10`;async function o(){const n=u.value.trim();if(!n)return;u.classList.remove("error");const p=performance.now();try{const f=await d().query(n),x=Math.round(performance.now()-p),g=f.rows;if(g.length===0){m.innerHTML='<div style="padding:12px;color:#444;font-size:11px;font-family:sans-serif">No rows returned</div>',r.textContent=`0 rows · ${x}ms · local PGlite`;return}const h=Object.keys(g[0]),l=h.map(b=>`<th>${M(b)}</th>`).join(""),c=g.map(b=>`<tr>${h.map(S=>{const e=b[S];if(e==null)return'<td class="datum-dt-cell-null">null</td>';const s=typeof e=="object"?JSON.stringify(e):String(e);return`<td title="${M(s)}">${M(O(s,80))}</td>`}).join("")}</tr>`).join("");m.innerHTML=`
         <table class="datum-dt-results-table">
-          <thead><tr>${f}</tr></thead>
-          <tbody>${m}</tbody>
-        </table>`,o.textContent=`${h.length} row${h.length===1?"":"s"} · ${x}ms · local PGlite`}catch(b){c.classList.add("error"),u.innerHTML=`<div class="datum-dt-error-msg">${$(String(b))}</div>`,o.textContent=`Error · ${Math.round(performance.now()-g)}ms`}}n.addEventListener("click",l),c.addEventListener("keydown",d=>{(d.metaKey||d.ctrlKey)&&d.key==="Enter"&&(d.preventDefault(),l())})}function $(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function O(t,e){return t.length>e?t.slice(0,e)+"…":t}const j={id:"datum-dt-rb-id",geom:"datum-dt-rb-geom",updated_at:"datum-dt-rb-upd",properties:"datum-dt-rb-prop",data:"datum-dt-rb-data"};function D(t,e){t.innerHTML=`
+          <thead><tr>${l}</tr></thead>
+          <tbody>${c}</tbody>
+        </table>`,r.textContent=`${g.length} row${g.length===1?"":"s"} · ${x}ms · local PGlite`}catch(f){u.classList.add("error"),m.innerHTML=`<div class="datum-dt-error-msg">${M(String(f))}</div>`,r.textContent=`Error · ${Math.round(performance.now()-p)}ms`}}i.addEventListener("click",o),u.addEventListener("keydown",n=>{(n.metaKey||n.ctrlKey)&&n.key==="Enter"&&(n.preventDefault(),o())})}function M(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function O(t,d){return t.length>d?t.slice(0,d)+"…":t}const D={id:"datum-dt-rb-id",geom:"datum-dt-rb-geom",updated_at:"datum-dt-rb-upd",properties:"datum-dt-rb-prop",data:"datum-dt-rb-data"};function j(t,d){t.innerHTML=`
     <div class="datum-dt-schema-wrap"></div>
     <div class="datum-dt-schema-bar">—</div>
-  `;const c=t.querySelector(".datum-dt-schema-wrap"),n=t.querySelector(".datum-dt-schema-bar");async function u(){var x,h;const o=e(),l=o.columns;if(!l){c.innerHTML='<div style="padding:12px;color:#444;font-size:11px;font-family:sans-serif">Waiting for schema message…</div>',n.textContent="—";return}const d=l.map(i=>{const f=j[i.role]??"datum-dt-rb-data",m=i.nullable?'<span class="datum-dt-col-nul">nullable</span>':'<span class="datum-dt-col-nn">NOT NULL</span>';return`<tr>
-        <td class="datum-dt-col-name">${C(i.name)}</td>
-        <td class="datum-dt-col-type">${C(i.pg_type)}</td>
-        <td><span class="datum-dt-rb ${f}">${C(i.role)}</span></td>
-        <td>${m}</td>
-      </tr>`}).join("");c.innerHTML=`
+  `;const u=t.querySelector(".datum-dt-schema-wrap"),i=t.querySelector(".datum-dt-schema-bar");async function m(){var x,g;const r=d(),o=r.columns;if(!o){u.innerHTML='<div style="padding:12px;color:#444;font-size:11px;font-family:sans-serif">Waiting for schema message…</div>',i.textContent="—";return}const n=o.map(h=>{const l=D[h.role]??"datum-dt-rb-data",c=h.nullable?'<span class="datum-dt-col-nul">nullable</span>':'<span class="datum-dt-col-nn">NOT NULL</span>';return`<tr>
+        <td class="datum-dt-col-name">${E(h.name)}</td>
+        <td class="datum-dt-col-type">${E(h.pg_type)}</td>
+        <td><span class="datum-dt-rb ${l}">${E(h.role)}</span></td>
+        <td>${c}</td>
+      </tr>`}).join("");u.innerHTML=`
       <table class="datum-dt-schema-table">
         <thead><tr><th>column</th><th>pg_type</th><th>role</th><th>nullable</th></tr></thead>
-        <tbody>${d}</tbody>
-      </table>`;const g=l.filter(i=>i.role==="data").length;let b="—";try{b=((h=(x=(await o.query("SELECT value FROM _datum_meta WHERE key = 'schema_hash'")).rows[0])==null?void 0:x.value)==null?void 0:h.slice(0,8))??"—"}catch{}n.innerHTML=`
-      <span>table <b>${C(o.tableName)}</b></span>
-      <span>${l.length} columns · ${g} typed</span>
-      <span>hash <b class="datum-dt-hash">${C(b)}</b></span>
+        <tbody>${n}</tbody>
+      </table>`;const p=o.filter(h=>h.role==="data").length;let f="—";try{f=((g=(x=(await r.query("SELECT value FROM _datum_meta WHERE key = 'schema_hash'")).rows[0])==null?void 0:x.value)==null?void 0:g.slice(0,8))??"—"}catch{}i.innerHTML=`
+      <span>table <b>${E(r.tableName)}</b></span>
+      <span>${o.length} columns · ${p} typed</span>
+      <span>hash <b class="datum-dt-hash">${E(f)}</b></span>
       <span>mirrored from server ✓</span>
-    `}u()}function C(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}function R(t,e,c){const n=t.__dtStatusInterval;n!==void 0&&clearInterval(n),t.innerHTML=`
+    `}m()}function E(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}function R(t,d,u){const i=t.__dtStatusInterval;i!==void 0&&clearInterval(i),t.innerHTML=`
     <div class="datum-dt-stat-grid">
       <div class="datum-dt-stat-cell" id="datum-dt-s-conn">
         <div class="datum-dt-stat-lbl">connection</div>
@@ -319,9 +348,9 @@ function I(t){return Array.isArray(t)?t:[t]}const H=`
       </div>
     </div>
     <div id="datum-dt-notice-area"></div>
-  `;const u=t.querySelector("#datum-dt-s-conn .datum-dt-stat-val"),o=t.querySelector("#datum-dt-s-conn .datum-dt-stat-sub"),l=t.querySelector("#datum-dt-s-pending .datum-dt-stat-val"),d=t.querySelector("#datum-dt-s-pending .datum-dt-stat-sub"),g=t.querySelector("#datum-dt-s-schema .datum-dt-stat-val"),b=t.querySelector("#datum-dt-s-schema .datum-dt-stat-sub"),x=t.querySelector("#datum-dt-notice-area");if(c){const{prev:f,next:m,time:v}=c,a=new Set((f??[]).map(s=>s.name)),r=new Set(m.map(s=>s.name)),y=[...new Set([...(f??[]).map(s=>s.name),...m.map(s=>s.name)])].map(s=>{const S=a.has(s),E=r.has(s);if(!S){const w=m.find(M=>M.name===s);return`<div class="datum-dt-diff-row a">+ ${k(s)} · <span style="opacity:0.7">${k(w.pg_type)}</span></div>`}if(!E){const w=(f??[]).find(M=>M.name===s);return`<div class="datum-dt-diff-row r">- ${k(s)} · <span style="opacity:0.7">${k(w.pg_type)}</span></div>`}const L=m.find(w=>w.name===s);return`<div class="datum-dt-diff-row s">&nbsp; ${k(s)} · <span style="opacity:0.5">${k(L.pg_type)}</span></div>`}).join("");x.innerHTML=`
+  `;const m=t.querySelector("#datum-dt-s-conn .datum-dt-stat-val"),r=t.querySelector("#datum-dt-s-conn .datum-dt-stat-sub"),o=t.querySelector("#datum-dt-s-pending .datum-dt-stat-val"),n=t.querySelector("#datum-dt-s-pending .datum-dt-stat-sub"),p=t.querySelector("#datum-dt-s-schema .datum-dt-stat-val"),f=t.querySelector("#datum-dt-s-schema .datum-dt-stat-sub"),x=t.querySelector("#datum-dt-notice-area");if(u){const{prev:l,next:c,time:b}=u,y=new Set((l??[]).map(a=>a.name)),S=new Set(c.map(a=>a.name)),s=[...new Set([...(l??[]).map(a=>a.name),...c.map(a=>a.name)])].map(a=>{const v=y.has(a),L=S.has(a);if(!v){const w=c.find($=>$.name===a);return`<div class="datum-dt-diff-row a">+ ${k(a)} · <span style="opacity:0.7">${k(w.pg_type)}</span></div>`}if(!L){const w=(l??[]).find($=>$.name===a);return`<div class="datum-dt-diff-row r">- ${k(a)} · <span style="opacity:0.7">${k(w.pg_type)}</span></div>`}const C=c.find(w=>w.name===a);return`<div class="datum-dt-diff-row s">&nbsp; ${k(a)} · <span style="opacity:0.5">${k(C.pg_type)}</span></div>`}).join("");x.innerHTML=`
       <div class="datum-dt-notice">
         <div class="datum-dt-notice-hdr">⚡ Schema changed — local DB wiped &amp; resynced</div>
-        <div class="datum-dt-diff">${y}</div>
-        <div class="datum-dt-notice-time">${P(v)} · triggered by server schema change</div>
-      </div>`}function h(){const f=e(),m=f.connectionStatus,v=f.pendingCount,a=m==="connected"?"datum-dt-dot-g":m==="connecting"?"datum-dt-dot-o":"datum-dt-dot-r",r=m==="connected"?"ok":m==="connecting"?"warn":"err";u.className=`datum-dt-stat-val ${r}`,u.innerHTML=`<span class="datum-dt-dot ${a}"></span>${m}`,o.textContent=f.tableName,l.className=`datum-dt-stat-val ${v>0?"warn":""}`,l.textContent=String(v),d.textContent=v>0?"in outbox · syncing soon":"nothing queued",f.query("SELECT value FROM _datum_meta WHERE key = 'schema_hash'").then(p=>{var S,E,L;const y=((E=(S=p.rows[0])==null?void 0:S.value)==null?void 0:E.slice(0,8))??"—",s=((L=f.columns)==null?void 0:L.length)??0;g.textContent=y,b.textContent=`${s} cols · v3 · in sync`}).catch(()=>{})}h();const i=setInterval(h,1e3);t.__dtStatusInterval=i}function P(t){const e=Math.floor((Date.now()-t.getTime())/1e3);return e<60?`${e}s ago`:e<3600?`${Math.floor(e/60)}m ago`:`${Math.floor(e/3600)}h ago`}function k(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}let F=!1;function G(t){if(F)return;F=!0;const e=I(t);if(e.length===0)return;const c=new Map;for(const d of e)d.onSchemaChange(({prev:g,next:b})=>{c.set(d.tableName,{prev:g,next:b,time:new Date})});const n=U(e),u=z(!0),o=z(!1),l=z(!1);n.tabPanels.append(u,o,l),T(u,n.getActiveClient),n.onTabChange(d=>{const g=n.getActiveClient(),b=c.get(g.tableName)??null;u.classList.toggle("active",d==="query"),o.classList.toggle("active",d==="schema"),l.classList.toggle("active",d==="status"),d==="query"&&T(u,n.getActiveClient),d==="schema"&&D(o,n.getActiveClient),d==="status"&&R(l,n.getActiveClient,b)})}function z(t){const e=document.createElement("div");return e.className="datum-dt-panel"+(t?" active":""),e}export{G as initDatumDevtools};
+        <div class="datum-dt-diff">${s}</div>
+        <div class="datum-dt-notice-time">${P(b)} · triggered by server schema change</div>
+      </div>`}function g(){const l=d(),c=l.connectionStatus,b=l.pendingCount,y=c==="connected"?"datum-dt-dot-g":c==="connecting"?"datum-dt-dot-o":"datum-dt-dot-r",S=c==="connected"?"ok":c==="connecting"?"warn":"err";m.className=`datum-dt-stat-val ${S}`,m.innerHTML=`<span class="datum-dt-dot ${y}"></span>${c}`,r.textContent=l.tableName,o.className=`datum-dt-stat-val ${b>0?"warn":""}`,o.textContent=String(b),n.textContent=b>0?"in outbox · syncing soon":"nothing queued",l.query("SELECT value FROM _datum_meta WHERE key = 'schema_hash'").then(e=>{var v,L,C;const s=((L=(v=e.rows[0])==null?void 0:v.value)==null?void 0:L.slice(0,8))??"—",a=((C=l.columns)==null?void 0:C.length)??0;p.textContent=s,f.textContent=`${a} cols · v3 · in sync`}).catch(()=>{})}g();const h=setInterval(g,1e3);t.__dtStatusInterval=h}function P(t){const d=Math.floor((Date.now()-t.getTime())/1e3);return d<60?`${d}s ago`:d<3600?`${Math.floor(d/60)}m ago`:`${Math.floor(d/3600)}h ago`}function k(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}let N=!1;function G(t){if(N)return;N=!0;const d=H(t);if(d.length===0)return;const u=new Map;for(const n of d)n.onSchemaChange(({prev:p,next:f})=>{u.set(n.tableName,{prev:p,next:f,time:new Date})});const i=U(d),m=T(!0),r=T(!1),o=T(!1);i.tabPanels.append(m,r,o),F(m,i.getActiveClient),i.onTabChange(n=>{const p=i.getActiveClient(),f=u.get(p.tableName)??null;m.classList.toggle("active",n==="query"),r.classList.toggle("active",n==="schema"),o.classList.toggle("active",n==="status"),n==="query"&&F(m,i.getActiveClient),n==="schema"&&j(r,i.getActiveClient),n==="status"&&R(o,i.getActiveClient,f)})}function T(t){const d=document.createElement("div");return d.className="datum-dt-panel"+(t?" active":""),d}export{G as initDatumDevtools};
