@@ -9,6 +9,9 @@ interface Props {
   onStatusChange: (status: AppStatus) => void
 }
 
+const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+const addPointHint = isTouch ? 'Tap the map to add a point' : 'Click the map to add a point'
+
 type ActiveTable = 'features' | 'waypoints'
 
 const LAYERS: { id: ActiveTable; label: string; color: string }[] = [
@@ -142,7 +145,7 @@ export function Map({ onStatusChange }: Props) {
       const onConnStatus = (s: import('datum-sync').ConnectionStatus) => {
         if (s === 'disconnected') onStatusChangeRef.current({ phase: 'error', text: 'Disconnected — reconnecting…' })
         if (s === 'connecting')   onStatusChangeRef.current({ phase: 'connecting', text: 'Reconnecting…' })
-        if (s === 'connected')    onStatusChangeRef.current({ phase: 'ready', text: 'Click the map to add a point' })
+        if (s === 'connected')    onStatusChangeRef.current({ phase: 'ready', text: addPointHint })
       }
 
       try {
@@ -154,7 +157,7 @@ export function Map({ onStatusChange }: Props) {
         waypointsClientRef.current = wc
         setFeaturesClient(fc)
         setWaypointsClient(wc)
-        onStatusChangeRef.current({ phase: 'ready', text: 'Click the map to add a point' })
+        onStatusChangeRef.current({ phase: 'ready', text: addPointHint })
 
         const { initDatumDevtools } = await import('datum-sync/devtools')
         initDatumDevtools([fc, wc])
@@ -179,7 +182,7 @@ export function Map({ onStatusChange }: Props) {
       const nameInput = document.createElement('input')
       nameInput.type = 'text'
       nameInput.placeholder = 'Name'
-      nameInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:14px;outline:none'
+      nameInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:16px;outline:none'
 
       // Features: free-text note. Waypoints: type dropdown.
       let getExtraProps: () => Record<string, string> = () => ({})
@@ -187,7 +190,7 @@ export function Map({ onStatusChange }: Props) {
         const noteInput = document.createElement('input')
         noteInput.type = 'text'
         noteInput.placeholder = 'Note (optional)'
-        noteInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:14px;outline:none'
+        noteInput.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:16px;outline:none'
         container.append(nameInput, noteInput)
         noteInput.addEventListener('keydown', (ev: KeyboardEvent) => { if (ev.key === 'Enter') saveBtn.click() })
         getExtraProps = (): Record<string, string> => {
@@ -196,7 +199,7 @@ export function Map({ onStatusChange }: Props) {
         }
       } else {
         const typeSelect = document.createElement('select')
-        typeSelect.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:14px;outline:none;background:#fff'
+        typeSelect.style.cssText = 'border:1px solid #ccc;border-radius:4px;padding:6px 8px;font-size:16px;outline:none;background:#fff'
         for (const opt of ['Landmark', 'Campsite', 'Viewpoint', 'Trailhead']) {
           const o = document.createElement('option')
           o.value = opt.toLowerCase()
@@ -245,7 +248,7 @@ export function Map({ onStatusChange }: Props) {
           activePopup = null
           onStatusChangeRef.current({ phase: 'saving', text: 'Saved — syncing…' })
           setTimeout(() => {
-            onStatusChangeRef.current({ phase: 'ready', text: 'Click the map to add a point' })
+            onStatusChangeRef.current({ phase: 'ready', text: addPointHint })
           }, 2000)
         } catch (err) {
           saveBtn.disabled = false

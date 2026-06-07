@@ -49,9 +49,19 @@ export function createPanel(clients: DatumClient[]): PanelHandle {
   let activeTab = 'query'
   const tabChangeListeners: Array<(tab: string) => void> = []
 
+  const fab = document.createElement('button')
+  fab.id = 'datum-dt-fab'
+  fab.title = 'Open datum devtools'
+  fab.innerHTML = LOGO_SVG
+  fab.addEventListener('click', () => toggle())
+  document.body.appendChild(fab)
+
   const root = document.createElement('div')
   root.id = 'datum-devtools'
-  if (!state.open) root.classList.add('hidden')
+  if (!state.open) {
+    root.classList.add('hidden')
+    fab.classList.add('visible')
+  }
   root.style.height = `${state.height}px`
 
   const resizeHandle = document.createElement('div')
@@ -115,6 +125,7 @@ export function createPanel(clients: DatumClient[]): PanelHandle {
 
   function toggle() {
     const hidden = root.classList.toggle('hidden')
+    fab.classList.toggle('visible', hidden)
     state.open = !hidden
     saveState({ ...state, open: state.open })
   }
@@ -131,15 +142,18 @@ export function createPanel(clients: DatumClient[]): PanelHandle {
 
   let dragStart = 0
   let dragHeight = 0
+
+  function applyDrag(clientY: number) {
+    const delta = dragStart - clientY
+    const newH = Math.max(120, Math.min(window.innerHeight * 0.8, dragHeight + delta))
+    root.style.height = `${newH}px`
+    state.height = newH
+  }
+
   resizeHandle.addEventListener('mousedown', (e: MouseEvent) => {
     dragStart = e.clientY
     dragHeight = root.getBoundingClientRect().height
-    const onMove = (ev: MouseEvent) => {
-      const delta = dragStart - ev.clientY
-      const newH = Math.max(120, Math.min(window.innerHeight * 0.8, dragHeight + delta))
-      root.style.height = `${newH}px`
-      state.height = newH
-    }
+    const onMove = (ev: MouseEvent) => applyDrag(ev.clientY)
     const onUp = () => {
       saveState(state)
       document.removeEventListener('mousemove', onMove)
@@ -148,6 +162,20 @@ export function createPanel(clients: DatumClient[]): PanelHandle {
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   })
+
+  resizeHandle.addEventListener('touchstart', (e: TouchEvent) => {
+    e.preventDefault()
+    dragStart = e.touches[0].clientY
+    dragHeight = root.getBoundingClientRect().height
+    const onMove = (ev: TouchEvent) => applyDrag(ev.touches[0].clientY)
+    const onEnd = () => {
+      saveState(state)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onEnd)
+    }
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onEnd)
+  }, { passive: false })
 
   return {
     root,

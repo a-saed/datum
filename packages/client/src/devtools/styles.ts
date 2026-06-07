@@ -258,4 +258,33 @@ export const PANEL_CSS = `
 .datum-dt-diff-row.r { background: #2e1a1a; color: #e06c75; }
 .datum-dt-diff-row.s { color: #444; }
 .datum-dt-notice-time { font-size: 10px; color: #444; margin-top: 5px; }
+
+#datum-dt-fab {
+  display: none;
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #252525;
+  border: 1px solid rgba(37,99,235,0.35);
+  color: #2563eb;
+  cursor: pointer;
+  z-index: 999999;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.45);
+  padding: 0;
+}
+#datum-dt-fab.visible { display: flex; }
+#datum-dt-fab:hover { background: #2e2e2e; border-color: rgba(37,99,235,0.6); }
+
+@media (pointer: coarse) {
+  #datum-devtools-resize {
+    height: 16px;
+    top: -6px;
+  }
+  .datum-dt-kbd { display: none; }
+}
 `
