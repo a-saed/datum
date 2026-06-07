@@ -259,6 +259,30 @@ export const PANEL_CSS = `
 .datum-dt-diff-row.s { color: #444; }
 .datum-dt-notice-time { font-size: 10px; color: #444; margin-top: 5px; }
 
+.datum-dt-clear-wrap {
+  padding: 10px 12px;
+  border-top: 1px solid #252525;
+}
+.datum-dt-clear-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid #383838;
+  color: #666;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  transition: border-color 0.15s, color 0.15s;
+}
+.datum-dt-clear-btn:hover { border-color: #e06c75; color: #e06c75; }
+.datum-dt-clear-hint {
+  margin-top: 5px;
+  font-size: 10px;
+  color: #444;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
 #datum-dt-fab {
   display: none;
   position: fixed;

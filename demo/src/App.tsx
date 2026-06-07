@@ -71,4 +71,19 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+// ?reset: wipe local datum-* IDB databases and reload without the param
+if (new URLSearchParams(location.search).has('reset')) {
+  void indexedDB.databases()
+    .then(dbs => Promise.all(
+      dbs
+        .filter(db => db.name?.startsWith('datum-'))
+        .map(db => new Promise<void>(res => {
+          const req = indexedDB.deleteDatabase(db.name!)
+          req.onsuccess = req.onerror = () => res()
+        }))
+    ))
+    .then(() => location.replace(location.pathname))
+    .catch(() => location.replace(location.pathname))
+} else {
+  createRoot(document.getElementById('root')!).render(<App />)
+}

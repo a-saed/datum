@@ -40,6 +40,10 @@ export function mountStatusTab(
       </div>
     </div>
     <div id="datum-dt-notice-area"></div>
+    <div class="datum-dt-clear-wrap">
+      <button class="datum-dt-clear-btn" id="datum-dt-clear">Clear local data &amp; reload</button>
+      <div class="datum-dt-clear-hint">Wipes the local PGlite database. Server data is unaffected.</div>
+    </div>
   `
 
   const connVal    = container.querySelector<HTMLElement>('#datum-dt-s-conn .datum-dt-stat-val')!
@@ -107,6 +111,22 @@ export function mountStatusTab(
   update()
   const interval = setInterval(update, 1000)
   ;(container as any).__dtStatusInterval = interval
+
+  container.querySelector<HTMLButtonElement>('#datum-dt-clear')!.addEventListener('click', async () => {
+    if (!confirm('Wipe local PGlite database and reload?\n\nServer data is unaffected.')) return
+    try {
+      const dbs = await indexedDB.databases()
+      await Promise.all(
+        dbs
+          .filter(db => db.name?.startsWith('datum-'))
+          .map(db => new Promise<void>(res => {
+            const req = indexedDB.deleteDatabase(db.name!)
+            req.onsuccess = req.onerror = () => res()
+          }))
+      )
+    } catch { /* ignore — schema wipe on next load handles any inconsistency */ }
+    location.reload()
+  })
 }
 
 function formatRelTime(d: Date): string {
