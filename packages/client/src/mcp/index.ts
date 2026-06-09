@@ -85,7 +85,7 @@ export async function handleGetStatus(client: DatumClient): Promise<{
 export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): Promise<void> {
   const allowWrites = opts.allowWrites ?? false
 
-  const server = new McpServer({ name: 'datum', version: '0.12.0' /* keep in sync with package.json */ })
+  const server = new McpServer({ name: 'datum', version: '0.13.0' /* keep in sync with package.json */ })
 
   server.tool(
     'query',
