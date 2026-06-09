@@ -5,10 +5,12 @@ import { initDatumMcp } from './index.js'
 const args = process.argv.slice(2)
 const serverUrl = args.find(a => !a.startsWith('--'))
 const tableIdx  = args.indexOf('--table')
-const tableName = tableIdx >= 0 ? args[tableIdx + 1] : 'features'
+const tableNext = tableIdx >= 0 ? args[tableIdx + 1] : undefined
+const tableName = (tableNext && !tableNext.startsWith('--')) ? tableNext : 'features'
 const allowWrites = args.includes('--allow-writes')
 const jwtIdx    = args.indexOf('--jwt')
-const jwt       = jwtIdx >= 0 ? args[jwtIdx + 1] : undefined
+const jwtNext   = jwtIdx >= 0 ? args[jwtIdx + 1] : undefined
+const jwt       = (jwtNext && !jwtNext.startsWith('--')) ? jwtNext : undefined
 
 if (!serverUrl) {
   process.stderr.write(
@@ -17,7 +19,7 @@ if (!serverUrl) {
   process.exit(1)
 }
 
-process.stderr.write(`datum MCP: connecting to ${serverUrl} (table: ${tableName})\n`)
+process.stderr.write(`datum MCP: connecting to ${serverUrl} (table: ${tableName}, writes: ${allowWrites ? 'enabled' : 'read-only'})\n`)
 
 try {
   const client = await DatumClient.connect({
@@ -28,6 +30,7 @@ try {
   })
   process.stderr.write('datum MCP: connected — serving tools over stdio\n')
   await initDatumMcp(client, { allowWrites })
+  process.exit(0)
 } catch (err) {
   process.stderr.write(`datum MCP: failed to connect — ${String(err)}\n`)
   process.exit(1)
