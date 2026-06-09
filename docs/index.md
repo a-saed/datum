@@ -24,6 +24,8 @@ features:
     details: PGlite persists to IndexedDB. Returning visits resolve in ~200ms with local data already queryable while delta catch-up runs in the background.
   - title: Per-user auth + RLS
     details: Pass a JWT on connect. datum forwards all claims as Postgres session variables so your Row Level Security policies filter data per user — no code changes needed.
+  - title: MCP server for AI agents
+    details: Point Claude Desktop, Cursor, or any MCP-compatible agent at your synced PostGIS data. Query with natural language — full PostGIS available, read-only by default.
 ---
 
 ## What it looks like
