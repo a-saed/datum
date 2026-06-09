@@ -29,8 +29,11 @@ try {
     onStatusChange: s => process.stderr.write(`datum: ${s}\n`),
   })
   process.stderr.write('datum MCP: connected — serving tools over stdio\n')
+  process.stdin.on('end', async () => {
+    await client.disconnect()
+  })
   await initDatumMcp(client, { allowWrites })
-  process.exit(0)
+  // Process stays alive via StdioServerTransport's stdin listener
 } catch (err) {
   process.stderr.write(`datum MCP: failed to connect — ${String(err)}\n`)
   process.exit(1)

@@ -64,6 +64,20 @@ describe('handleQuery', () => {
     ).rejects.toThrow('Write operations are disabled')
   })
 
+  it('rejects EXPLAIN ANALYZE with block comment injection when allowWrites is false', async () => {
+    const client = makeClient()
+    await expect(
+      handleQuery(client, 'EXPLAIN /* x */ ANALYZE DELETE FROM features', undefined, false)
+    ).rejects.toThrow('Write operations are disabled')
+  })
+
+  it('rejects EXPLAIN ANALYZE with line comment injection when allowWrites is false', async () => {
+    const client = makeClient()
+    await expect(
+      handleQuery(client, 'EXPLAIN --note\nANALYZE DELETE FROM features', undefined, false)
+    ).rejects.toThrow('Write operations are disabled')
+  })
+
   it('allows SELECT with "into" in a string literal', async () => {
     const mockQuery = vi.fn().mockResolvedValue({ rows: [{ name: 'fall into' }] })
     const client = makeClient({ query: mockQuery })

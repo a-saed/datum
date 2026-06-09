@@ -58,7 +58,7 @@ Run arbitrary SQL against the local PGlite database. Full PostGIS available (`ST
 
 ```
 Input:  { sql: string, params?: unknown[] }
-Output: { rows: Record<string, unknown>[], rowCount: number, duration_ms: number }
+Output: { rows: Record<string, unknown>[], row_count: number, duration_ms: number }
 ```
 
 - With `allowWrites: false` (default): mutations (`INSERT`/`UPDATE`/`DELETE`) are rejected before execution and return an error.

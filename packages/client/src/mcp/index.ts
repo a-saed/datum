@@ -7,6 +7,12 @@ export interface McpOptions {
   allowWrites?: boolean
 }
 
+function stripSqlComments(sql: string): string {
+  return sql
+    .replace(/--[^\n]*/g, ' ')          // strip -- line comments
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')  // strip /* */ block comments (non-nested)
+}
+
 function hasUnquotedInto(sql: string): boolean {
   // Split on single quotes; even-indexed segments are outside quotes
   const segments = sql.split("'")
@@ -17,7 +23,7 @@ function hasUnquotedInto(sql: string): boolean {
 }
 
 function isReadOnlySql(sql: string): boolean {
-  const s = sql.trimStart()
+  const s = stripSqlComments(sql).trimStart()
   if (!/^(SELECT|EXPLAIN)\b/i.test(s)) return false
   if (/^EXPLAIN\s*\(/i.test(s)) return false   // parenthesized EXPLAIN may include ANALYZE
   if (/^EXPLAIN\s+ANALYZE\b/i.test(s)) return false   // EXPLAIN ANALYZE executes DML
@@ -90,6 +96,9 @@ export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): 
     },
     async ({ sql, params }) => {
       try {
+        if (client.connectionStatus !== 'connected') {
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'disconnected — reconnecting' }) }], isError: true }
+        }
         const result = await handleQuery(client, sql, params, allowWrites)
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
       } catch (err) {
