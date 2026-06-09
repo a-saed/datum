@@ -25,7 +25,7 @@ describe('handleQuery', () => {
     })
     const result = await handleQuery(client, 'SELECT name FROM features', undefined, false)
     expect(result.rows).toEqual([{ name: 'Tower Bridge' }])
-    expect(result.rowCount).toBe(1)
+    expect(result.row_count).toBe(1)
     expect(typeof result.duration_ms).toBe('number')
   })
 
@@ -36,10 +36,14 @@ describe('handleQuery', () => {
     ).rejects.toThrow('Write operations are disabled')
   })
 
-  it('rejects CTE wrapping a mutation when allowWrites is false', async () => {
+  it.each([
+    ['DELETE', 'WITH x AS (DELETE FROM features) SELECT 1'],
+    ['INSERT', 'WITH x AS (INSERT INTO features (name) VALUES ($1)) SELECT 1'],
+    ['UPDATE', 'WITH x AS (UPDATE features SET name=$1) SELECT 1'],
+  ])('rejects CTE wrapping %s when allowWrites is false', async (_verb, sql) => {
     const client = makeClient()
     await expect(
-      handleQuery(client, 'WITH x AS (DELETE FROM features) SELECT 1', undefined, false)
+      handleQuery(client, sql, undefined, false)
     ).rejects.toThrow('Write operations are disabled')
   })
 

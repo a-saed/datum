@@ -14,7 +14,7 @@ export async function handleQuery(
   sql: string,
   params: unknown[] | undefined,
   allowWrites: boolean,
-): Promise<{ rows: Record<string, unknown>[]; rowCount: number; duration_ms: number }> {
+): Promise<{ rows: Record<string, unknown>[]; row_count: number; duration_ms: number }> {
   if (!allowWrites && !SELECT_ONLY_RE.test(sql)) {
     throw new Error('Write operations are disabled. Only SELECT and EXPLAIN are permitted. Start the MCP server with --allow-writes to enable writes.')
   }
@@ -23,7 +23,7 @@ export async function handleQuery(
   // rows_returned is 0 for mutations without RETURNING clause
   return {
     rows: result.rows,
-    rowCount: result.rows.length,
+    row_count: result.rows.length,
     duration_ms: Date.now() - start,
   }
 }
@@ -87,12 +87,8 @@ export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): 
     'Get the table schema: column names, PostgreSQL types, and datum roles (id, geom, updated_at, properties, data).',
     {},
     async () => {
-      try {
-        const result = handleGetSchema(client)
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
-      } catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${String(err)}` }], isError: true }
-      }
+      const result = handleGetSchema(client)
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
     },
   )
 
