@@ -36,6 +36,20 @@ describe('handleQuery', () => {
     ).rejects.toThrow('Write operations are disabled')
   })
 
+  it('rejects CTE wrapping a mutation when allowWrites is false', async () => {
+    const client = makeClient()
+    await expect(
+      handleQuery(client, 'WITH x AS (DELETE FROM features) SELECT 1', undefined, false)
+    ).rejects.toThrow('Write operations are disabled')
+  })
+
+  it('passes sql and params to client.query', async () => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [] })
+    const client = makeClient({ query: mockQuery })
+    await handleQuery(client, 'SELECT $1::text', ['hello'], false)
+    expect(mockQuery).toHaveBeenCalledWith('SELECT $1::text', ['hello'])
+  })
+
   it('allows mutations when allowWrites is true', async () => {
     const client = makeClient({
       query: vi.fn().mockResolvedValue({ rows: [] }),
@@ -69,5 +83,10 @@ describe('handleGetStatus', () => {
     expect(result.table).toBe('features')
     expect(result.pending_writes).toBe(2)
     expect(result.row_count).toBe(42)
+  })
+
+  it('propagates query errors', async () => {
+    const client = makeClient({ query: vi.fn().mockRejectedValue(new Error('DB error')) })
+    await expect(handleGetStatus(client)).rejects.toThrow('DB error')
   })
 })

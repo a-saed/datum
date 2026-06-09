@@ -7,7 +7,7 @@ export interface McpOptions {
   allowWrites?: boolean
 }
 
-const MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b/i
+const SELECT_ONLY_RE = /^\s*(SELECT|EXPLAIN)\b/i
 
 export async function handleQuery(
   client: DatumClient,
@@ -15,11 +15,12 @@ export async function handleQuery(
   params: unknown[] | undefined,
   allowWrites: boolean,
 ): Promise<{ rows: Record<string, unknown>[]; rowCount: number; duration_ms: number }> {
-  if (!allowWrites && MUTATION_RE.test(sql)) {
-    throw new Error('Write operations are disabled. Start the MCP server with --allow-writes to enable them.')
+  if (!allowWrites && !SELECT_ONLY_RE.test(sql)) {
+    throw new Error('Write operations are disabled. Only SELECT and EXPLAIN are permitted. Start the MCP server with --allow-writes to enable writes.')
   }
   const start = Date.now()
   const result = await client.query<Record<string, unknown>>(sql, params)
+  // rows_returned is 0 for mutations without RETURNING clause
   return {
     rows: result.rows,
     rowCount: result.rows.length,
@@ -62,7 +63,7 @@ export async function handleGetStatus(client: DatumClient): Promise<{
 export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): Promise<void> {
   const allowWrites = opts.allowWrites ?? false
 
-  const server = new McpServer({ name: 'datum', version: '0.12.0' })
+  const server = new McpServer({ name: 'datum', version: '0.12.0' /* keep in sync with package.json */ })
 
   server.tool(
     'query',
@@ -86,8 +87,12 @@ export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): 
     'Get the table schema: column names, PostgreSQL types, and datum roles (id, geom, updated_at, properties, data).',
     {},
     async () => {
-      const result = handleGetSchema(client)
-      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
+      try {
+        const result = handleGetSchema(client)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
+      } catch (err) {
+        return { content: [{ type: 'text' as const, text: `Error: ${String(err)}` }], isError: true }
+      }
     },
   )
 
