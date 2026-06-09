@@ -11,10 +11,15 @@ const allowWrites = args.includes('--allow-writes')
 const jwtIdx    = args.indexOf('--jwt')
 const jwtNext   = jwtIdx >= 0 ? args[jwtIdx + 1] : undefined
 const jwt       = (jwtNext && !jwtNext.startsWith('--')) ? jwtNext : undefined
+const bboxIdx   = args.indexOf('--bbox')
+const bboxNext  = bboxIdx >= 0 ? args[bboxIdx + 1] : undefined
+const bbox: [number, number, number, number] | undefined = bboxNext && !bboxNext.startsWith('--')
+  ? bboxNext.split(',').map(Number) as [number, number, number, number]
+  : undefined
 
 if (!serverUrl) {
   process.stderr.write(
-    'Usage: datum-mcp <ws://server-url> [--table <name>] [--allow-writes] [--jwt <token>]\n'
+    'Usage: datum-mcp <ws://server-url> [--table <name>] [--bbox minX,minY,maxX,maxY] [--allow-writes] [--jwt <token>]\n'
   )
   process.exit(1)
 }
@@ -22,9 +27,12 @@ if (!serverUrl) {
 process.stderr.write(`datum MCP: connecting to ${serverUrl} (table: ${tableName}, writes: ${allowWrites ? 'enabled' : 'read-only'})\n`)
 
 try {
+  // Default to world bbox for spatial tables — MCP clients query all data, not a viewport.
+  // Pass --bbox minX,minY,maxX,maxY to restrict the sync area.
   const client = await DatumClient.connect({
     serverUrl,
     table: tableName,
+    bbox: bbox ?? [-180, -90, 180, 90],
     ...(jwt ? { token: jwt } : {}),
     onStatusChange: s => process.stderr.write(`datum: ${s}\n`),
   })

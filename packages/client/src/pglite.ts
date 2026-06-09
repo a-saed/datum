@@ -11,7 +11,9 @@ export const SCHEMA_VERSION = '3'
  * Full schema setup is deferred to setupSchema() once columns are known.
  */
 export async function bootLocalDb(dbName = 'datum', tableName = 'features'): Promise<{ db: PGlite; isFirstVisit: boolean }> {
-  const db = new PGlite(`idb://datum-${dbName}`, { extensions: { postgis } })
+  const hasIdb = typeof indexedDB !== 'undefined'
+  const dbPath = hasIdb ? `idb://datum-${dbName}` : `datum-${dbName}`
+  const db = new PGlite(dbPath, { extensions: { postgis } })
   await db.exec('CREATE EXTENSION IF NOT EXISTS postgis')
   await db.exec(`
     CREATE TABLE IF NOT EXISTS _datum_meta (
