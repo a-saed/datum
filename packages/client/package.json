@@ -26,31 +26,40 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "datum-mcp": "./dist/mcp/cli.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types":  "./dist/index.d.ts"
+      "types": "./dist/index.d.ts"
     },
     "./react": {
       "import": "./dist/react.js",
-      "types":  "./dist/react.d.ts"
+      "types": "./dist/react.d.ts"
     },
     "./devtools": {
       "import": "./dist/devtools/index.js",
-      "types":  "./dist/devtools/index.d.ts"
+      "types": "./dist/devtools/index.d.ts"
+    },
+    "./mcp": {
+      "import": "./dist/mcp/index.js",
+      "types":  "./dist/mcp/index.d.ts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/mcp/cli.js",
     "test": "vitest run"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.4.6",
     "@electric-sql/pglite-postgis": "^0.0.8",
-    "uuid": "^10.0.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.25.76"
   },
   "peerDependencies": {
     "react": ">=18"
