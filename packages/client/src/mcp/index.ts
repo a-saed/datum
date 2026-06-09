@@ -7,7 +7,13 @@ export interface McpOptions {
   allowWrites?: boolean
 }
 
-const SELECT_ONLY_RE = /^\s*(SELECT|EXPLAIN)\b/i
+function isReadOnlySql(sql: string): boolean {
+  const s = sql.trimStart()
+  if (!/^(SELECT|EXPLAIN)\b/i.test(s)) return false
+  if (/^EXPLAIN\s+ANALYZE\b/i.test(s)) return false   // EXPLAIN ANALYZE executes DML
+  if (/^SELECT\b.+\bINTO\b/is.test(s)) return false    // SELECT INTO creates a table
+  return true
+}
 
 export async function handleQuery(
   client: DatumClient,
@@ -15,8 +21,8 @@ export async function handleQuery(
   params: unknown[] | undefined,
   allowWrites: boolean,
 ): Promise<{ rows: Record<string, unknown>[]; row_count: number; duration_ms: number }> {
-  if (!allowWrites && !SELECT_ONLY_RE.test(sql)) {
-    throw new Error('Write operations are disabled. Only SELECT and EXPLAIN are permitted. Start the MCP server with --allow-writes to enable writes.')
+  if (!allowWrites && !isReadOnlySql(sql)) {
+    throw new Error('Write operations are disabled. Only SELECT and EXPLAIN (without ANALYZE) are permitted. Start the MCP server with --allow-writes to enable writes.')
   }
   const start = Date.now()
   const result = await client.query<Record<string, unknown>>(sql, params)

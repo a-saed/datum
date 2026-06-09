@@ -47,6 +47,16 @@ describe('handleQuery', () => {
     ).rejects.toThrow('Write operations are disabled')
   })
 
+  it.each([
+    ['EXPLAIN ANALYZE', 'EXPLAIN ANALYZE DELETE FROM features'],
+    ['SELECT INTO',     'SELECT * INTO new_table FROM features'],
+  ])('rejects %s when allowWrites is false', async (_label, sql) => {
+    const client = makeClient()
+    await expect(
+      handleQuery(client, sql, undefined, false)
+    ).rejects.toThrow('Write operations are disabled')
+  })
+
   it('passes sql and params to client.query', async () => {
     const mockQuery = vi.fn().mockResolvedValue({ rows: [] })
     const client = makeClient({ query: mockQuery })
