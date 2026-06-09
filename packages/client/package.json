@@ -44,7 +44,7 @@
     },
     "./mcp": {
       "import": "./dist/mcp/index.js",
-      "types":  "./dist/mcp/index.d.ts"
+      "types": "./dist/mcp/index.d.ts"
     }
   },
   "files": [
@@ -59,7 +59,7 @@
     "@electric-sql/pglite-postgis": "^0.0.8",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "uuid": "^10.0.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.0"
   },
   "peerDependencies": {
     "react": ">=18"
