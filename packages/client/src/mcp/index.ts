@@ -7,11 +7,21 @@ export interface McpOptions {
   allowWrites?: boolean
 }
 
+function hasUnquotedInto(sql: string): boolean {
+  // Split on single quotes; even-indexed segments are outside quotes
+  const segments = sql.split("'")
+  for (let i = 0; i < segments.length; i += 2) {
+    if (/\bINTO\b/i.test(segments[i]!)) return true
+  }
+  return false
+}
+
 function isReadOnlySql(sql: string): boolean {
   const s = sql.trimStart()
   if (!/^(SELECT|EXPLAIN)\b/i.test(s)) return false
+  if (/^EXPLAIN\s*\(/i.test(s)) return false   // parenthesized EXPLAIN may include ANALYZE
   if (/^EXPLAIN\s+ANALYZE\b/i.test(s)) return false   // EXPLAIN ANALYZE executes DML
-  if (/^SELECT\b.+\bINTO\b/is.test(s)) return false    // SELECT INTO creates a table
+  if (/^SELECT\b/i.test(s) && hasUnquotedInto(s)) return false  // SELECT INTO creates a table
   return true
 }
 
