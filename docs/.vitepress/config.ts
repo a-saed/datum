@@ -22,6 +22,7 @@ export default defineConfig({
       { text: 'How It Works', link: '/how-it-works' },
       { text: 'API Reference', link: '/api' },
       { text: 'Authentication', link: '/auth' },
+      { text: 'MCP Server', link: '/mcp' },
       { text: 'Self-Hosting', link: '/self-hosting' },
     ],
     socialLinks: [
