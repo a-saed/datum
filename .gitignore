@@ -9,6 +9,18 @@ packages/server/*.exe
 # OS
 .DS_Store
 
+# Editor
+.zed/
+
+# Local MCP config
+.mcp.json
+
+# Local PGlite/Postgres dev data
+datum-features/
+
+# Go test coverage
+*.out
+
 # Internal planning artifacts
 docs/superpowers/
 .superpowers/
