@@ -24,6 +24,7 @@ export default defineConfig({
       { text: 'Authentication', link: '/auth' },
       { text: 'MCP Server', link: '/mcp' },
       { text: 'Self-Hosting', link: '/self-hosting' },
+      { text: 'Troubleshooting', link: '/troubleshooting' },
     ],
     socialLinks: [
       { icon: 'github', link: 'https://github.com/a-saed/datum' },
