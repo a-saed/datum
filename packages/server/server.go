@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 )
 
@@ -41,12 +42,17 @@ func (ts *tableState) addClient(c *wsClient) {
 	ts.mu.Lock()
 	ts.clients[c.id] = c
 	ts.mu.Unlock()
+	metricConnections.WithLabelValues(ts.name).Inc()
 }
 
 func (ts *tableState) removeClient(id string) {
 	ts.mu.Lock()
+	_, existed := ts.clients[id]
 	delete(ts.clients, id)
 	ts.mu.Unlock()
+	if existed {
+		metricConnections.WithLabelValues(ts.name).Dec()
+	}
 }
 
 func (ts *tableState) broadcast(msg []byte, originClientID string, geomBbox [4]float64) {
@@ -126,6 +132,7 @@ func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin str
 	s.mux.HandleFunc("/ws", s.handleWS)
 	s.mux.HandleFunc("/healthz", s.handleHealthz)
 	s.mux.HandleFunc("/readyz", s.handleReadyz)
+	s.mux.Handle("/metrics", promhttp.Handler())
 	return s
 }
 
@@ -291,6 +298,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				s.logger.Warn("subscribe: unknown table", "client_id", msg.ClientID, "table", msg.Table)
 				continue
 			}
+			metricMessagesTotal.WithLabelValues(ts.name, "subscribe").Inc()
 
 			isFirstSubscribe := client.table == ""
 
@@ -352,6 +360,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 		case "write":
 			if s.writeLimit > 0 && !s.allowWrite(clientIP) {
 				s.logger.Warn("rate limit exceeded", "client_ip", clientIP)
+				metricRateLimitRejections.Inc()
 				continue
 			}
 			var msg WriteMessage
@@ -363,11 +372,14 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				s.logger.Warn("write: unknown table", "client_id", client.id, "table", msg.Table)
 				continue
 			}
+			metricMessagesTotal.WithLabelValues(ts.name, "write").Inc()
 			writeIDs, err := applyWrites(r.Context(), s, ts, client.id, client.claims, msg.Edits)
 			if err != nil {
 				s.logger.Error("write error", "client_id", client.id, "err", err)
+				metricWritesTotal.WithLabelValues(ts.name, "error").Inc()
 				continue
 			}
+			metricWritesTotal.WithLabelValues(ts.name, "success").Inc()
 			if len(writeIDs) > 0 {
 				ack := AckMessage{Type: "ack", WriteIDs: writeIDs}
 				if b, err := json.Marshal(ack); err == nil {
@@ -384,6 +396,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(raw, &msg); err != nil {
 				continue
 			}
+			metricMessagesTotal.WithLabelValues(client.table, "auth").Inc()
 			claims, err := verifyToken(s.verifier, msg.Token)
 			if err != nil {
 				s.logger.Warn("token refresh rejected", "client_id", client.id, "err", err)

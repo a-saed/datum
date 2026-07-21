@@ -83,6 +83,7 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 	}
 
 	// Use a transaction so SET LOCAL session vars apply to the snapshot query.
+	dbStart := time.Now()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin snapshot tx: %w", err)
@@ -105,6 +106,7 @@ func sendSnapshot(ctx context.Context, s *server, ts *tableState, client *wsClie
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit snapshot tx: %w", err)
 	}
+	observeDBQuery("snapshot", dbStart)
 
 	if features == nil {
 		features = []map[string]any{}

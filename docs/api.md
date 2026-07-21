@@ -500,9 +500,21 @@ docker run \
 |---|---|---|
 | `/healthz` | Liveness — is the process up? No dependency checks. | `200` always, `{"status":"ok"}` |
 | `/readyz` | Readiness — can the server reach Postgres? | `200 {"status":"ok"}` if reachable, `503 {"status":"unavailable","error":"..."}` if not (checked with a 2s timeout) |
+| `/metrics` | Prometheus metrics. | Text exposition format. |
 | `/ws` | WebSocket sync connection. | See below. |
 
 Use `/healthz` for liveness probes and `/readyz` for readiness probes. Keeping these separate matters under Kubernetes: datum-server holds WebSocket clients in memory, so a transient Postgres outage should stop new traffic from being routed here (`/readyz` fails) without killing the pod and dropping every existing connection (`/healthz` stays healthy).
+
+`/metrics` exposes Prometheus metrics for scraping:
+
+| Metric | Type | Labels | Description |
+|---|---|---|---|
+| `datum_websocket_connections` | Gauge | `table` | Current active WebSocket connections. |
+| `datum_messages_total` | Counter | `table`, `type` (`subscribe`\|`write`\|`auth`) | WebSocket messages received. |
+| `datum_deltas_broadcast_total` | Counter | `table` | Delta messages broadcast to clients. |
+| `datum_writes_total` | Counter | `table`, `result` (`success`\|`error`) | Write requests processed. |
+| `datum_rate_limit_rejections_total` | Counter | — | Writes rejected by the per-IP rate limiter. |
+| `datum_db_query_duration_seconds` | Histogram | `operation` (`snapshot`\|`predicate_check`\|`rls_check`\|`validate_predicate`) | Runtime database query latency. |
 
 ---
 

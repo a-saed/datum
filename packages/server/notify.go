@@ -130,6 +130,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 						if goneMsg, err := json.Marshal(gone); err == nil {
 							select {
 							case cand.client.send <- goneMsg:
+								metricDeltasTotal.WithLabelValues(ts.name).Inc()
 							default:
 								s.logger.Warn("client send buffer full, dropping gone notification", "client_id", cand.id)
 							}
@@ -153,6 +154,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 
 			select {
 			case cand.client.send <- msg:
+				metricDeltasTotal.WithLabelValues(ts.name).Inc()
 			default:
 				s.logger.Warn("client send buffer full, dropping delta", "client_id", cand.id)
 			}

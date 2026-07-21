@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,6 +41,9 @@ func validatePredicate(ctx context.Context, pool *pgxpool.Pool, tableName string
 	// Replace $n with NULL for Postgres parser validation.
 	// NULL is syntactically valid in any expression position.
 	dummyWhere := paramRe.ReplaceAllString(where, "NULL")
+
+	dbStart := time.Now()
+	defer func() { observeDBQuery("validate_predicate", dbStart) }()
 
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
@@ -97,6 +101,9 @@ func checkRLSAccess(ctx context.Context, pool *pgxpool.Pool, ts *tableState, fea
 		return true, nil
 	}
 
+	dbStart := time.Now()
+	defer func() { observeDBQuery("rls_check", dbStart) }()
+
 	table := pgx.Identifier{ts.name}.Sanitize()
 	idCol := pgx.Identifier{idColName}.Sanitize()
 
@@ -140,6 +147,9 @@ func checkPredicateMatch(ctx context.Context, pool *pgxpool.Pool, ts *tableState
 	if idColName == "" {
 		return true, nil
 	}
+
+	dbStart := time.Now()
+	defer func() { observeDBQuery("predicate_check", dbStart) }()
 
 	table := pgx.Identifier{ts.name}.Sanitize()
 	idCol := pgx.Identifier{idColName}.Sanitize()
