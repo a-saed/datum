@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"regexp"
@@ -19,6 +18,8 @@ import (
 var tableNameRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func main() {
+	logger := newLogger(os.Getenv("LOG_LEVEL"))
+
 	configPath := flag.String("config", os.Getenv("CONFIG"), "Path to datum.yaml config file")
 	dbURL      := flag.String("db",     os.Getenv("DATABASE_URL"), "PostgreSQL connection URL (required)")
 	flag.Parse()
@@ -29,7 +30,8 @@ func main() {
 		var err error
 		fileCfg, err = loadConfig(*configPath)
 		if err != nil {
-			log.Fatalf("datum-server: %v", err)
+			logger.Error("config error", "err", err)
+			os.Exit(1)
 		}
 	}
 
@@ -44,12 +46,14 @@ func main() {
 	rateLimitStr := coalesce(os.Getenv("RATE_LIMIT"), fileRateLimit, "0")
 
 	if *dbURL == "" {
-		log.Fatal("datum-server: -db flag or DATABASE_URL env var is required")
+		logger.Error("missing database URL", "hint", "set -db flag or DATABASE_URL env var")
+		os.Exit(1)
 	}
 
 	writeLimit, err := strconv.Atoi(rateLimitStr)
 	if err != nil || writeLimit < 0 {
-		log.Fatalf("datum-server: invalid rate_limit value %q (must be a non-negative integer)", rateLimitStr)
+		logger.Error("invalid rate_limit value", "value", rateLimitStr, "hint", "must be a non-negative integer")
+		os.Exit(1)
 	}
 
 	defaults := defaultColumns()
@@ -75,7 +79,8 @@ func main() {
 	}
 
 	if len(tableConfs) == 0 || tableConfs[0].Name == "" {
-		log.Fatal("datum-server: table name is required (set table.name in datum.yaml, tables: list, or TABLE env var)")
+		logger.Error("table name is required", "hint", "set table.name in datum.yaml, tables: list, or TABLE env var")
+		os.Exit(1)
 	}
 
 	// Validate each table and build tableState objects.
@@ -83,13 +88,16 @@ func main() {
 	tables := make([]*tableState, 0, len(tableConfs))
 	for _, tc := range tableConfs {
 		if tc.Name == "" {
-			log.Fatal("datum-server: each tables entry must have a name")
+			logger.Error("each tables entry must have a name")
+			os.Exit(1)
 		}
 		if !tableNameRe.MatchString(tc.Name) {
-			log.Fatalf("datum-server: invalid table name %q (only [a-zA-Z_][a-zA-Z0-9_]*)", tc.Name)
+			logger.Error("invalid table name", "table", tc.Name, "hint", "only [a-zA-Z_][a-zA-Z0-9_]* allowed")
+			os.Exit(1)
 		}
 		if seen[tc.Name] {
-			log.Fatalf("datum-server: duplicate table name %q", tc.Name)
+			logger.Error("duplicate table name", "table", tc.Name)
+			os.Exit(1)
 		}
 		seen[tc.Name] = true
 
@@ -106,13 +114,15 @@ func main() {
 			"col_properties": cols.Properties,
 		} {
 			if !tableNameRe.MatchString(name) {
-				log.Fatalf("datum-server: table %q: invalid %s value %q (only [a-zA-Z_][a-zA-Z0-9_]*)", tc.Name, label, name)
+				logger.Error("invalid column config value", "table", tc.Name, "field", label, "value", name, "hint", "only [a-zA-Z_][a-zA-Z0-9_]* allowed")
+				os.Exit(1)
 			}
 		}
 		tables = append(tables, &tableState{
 			name:    tc.Name,
 			cols:    cols,
 			clients: make(map[string]*wsClient),
+			logger:  logger,
 		})
 	}
 
@@ -121,61 +131,69 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, *dbURL)
 	if err != nil {
-		log.Fatalf("datum-server: connect to postgres: %v", err)
+		logger.Error("connect to postgres failed", "err", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	// Build JWT verifier (nil when auth not configured).
 	verifier, err := newVerifier(fileCfg.Auth)
 	if err != nil {
-		log.Fatalf("datum-server: auth config: %v", err)
+		logger.Error("auth config error", "err", err)
+		os.Exit(1)
 	}
 
 	// Warn if connected as superuser — RLS would be bypassed.
 	if fileCfg.Auth.Enabled() {
 		var isSuperuser bool
 		if err := pool.QueryRow(ctx, `SELECT rolsuper FROM pg_roles WHERE rolname = current_user`).Scan(&isSuperuser); err != nil {
-			log.Printf("datum-server: could not determine if database role is superuser: %v", err)
+			logger.Warn("could not determine if database role is superuser", "err", err)
 		} else if isSuperuser {
-			log.Printf("WARN datum-server: DATABASE_URL connects as a superuser — Row Level Security will be bypassed. Create a restricted role for production use.")
+			logger.Warn("DATABASE_URL connects as a superuser; Row Level Security will be bypassed", "hint", "create a restricted role for production use")
 		}
 	}
 
 	for _, ts := range tables {
 		if err := runMigration(ctx, pool, ts.name, ts.cols); err != nil {
-			log.Fatalf("datum-server: migration failed for table %q: %v", ts.name, err)
+			logger.Error("migration failed", "table", ts.name, "err", err)
+			os.Exit(1)
 		}
 
-		columns, err := introspectSchema(ctx, pool, ts.name, ts.cols)
+		columns, err := introspectSchema(ctx, pool, ts.name, ts.cols, logger)
 		if err != nil {
-			log.Fatalf("datum-server: introspect schema for table %q: %v", ts.name, err)
+			logger.Error("schema introspection failed", "table", ts.name, "err", err)
+			os.Exit(1)
 		}
 		isSpatial, err := validateColumns(ts.name, columns)
 		if err != nil {
-			log.Fatalf("%v", err)
+			logger.Error("column validation failed", "table", ts.name, "err", err)
+			os.Exit(1)
 		}
 		ts.isSpatial = isSpatial
 		if !isSpatial {
-			log.Printf("datum-server: table %q: non-spatial mode (no geometry column)", ts.name)
+			logger.Info("table ready in non-spatial mode (no geometry column)", "table", ts.name)
 		}
 
 		if err := installTrigger(ctx, pool, ts.name, columns); err != nil {
-			log.Fatalf("datum-server: install trigger for table %q: %v", ts.name, err)
+			logger.Error("install trigger failed", "table", ts.name, "err", err)
+			os.Exit(1)
 		}
 
 		schemaMsg, err := json.Marshal(SchemaMessage{Type: "schema", Columns: columns})
 		if err != nil {
-			log.Fatalf("datum-server: serialise schema for table %q: %v", ts.name, err)
+			logger.Error("serialise schema failed", "table", ts.name, "err", err)
+			os.Exit(1)
 		}
 
 		ts.columns = columns
 		ts.schemaMsg = schemaMsg
-		log.Printf("datum-server: table %q ready (%d columns)", ts.name, len(columns))
+		logger.Info("table ready", "table", ts.name, "columns", len(columns))
 	}
 
-	srv := newServer(pool, tables, port, allowedOrigin, writeLimit, verifier)
-	log.Printf("datum-server: listening on :%s", port)
+	srv := newServer(pool, tables, port, allowedOrigin, writeLimit, verifier, logger)
+	logger.Info("listening", "port", port)
 	if err := srv.run(ctx); err != nil {
-		log.Fatalf("datum-server: %v", err)
+		logger.Error("server error", "err", err)
+		os.Exit(1)
 	}
 }

@@ -91,7 +91,15 @@ datum-server is a stateless Docker container — it runs anywhere Docker runs.
 
 **VPS / bare metal** — run the container with Docker or Docker Compose behind an nginx/Caddy reverse proxy that handles TLS. WebSocket upgrades work with a standard proxy config.
 
-**Kubernetes** — deploy as a Deployment with one replica per region. datum-server holds client connections in memory, so sticky sessions (or a single replica) are required for correct delta fan-out.
+**Kubernetes** — deploy as a Deployment with one replica per region. datum-server holds client connections in memory, so sticky sessions (or a single replica) are required for correct delta fan-out. Use `/healthz` for the liveness probe and `/readyz` for the readiness probe — a transient Postgres outage should mark the pod not-ready without restarting it and dropping every connected client.
+
+## Health checks & logging
+
+- `GET /healthz` — liveness, always `200` if the process is serving requests.
+- `GET /readyz` — readiness, `200` if Postgres is reachable, `503` if not (2s timeout).
+- Logs are structured JSON on stdout. Set `LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) to control verbosity.
+
+See [API Reference → datum-server](/api#datum-server-go-binary) for details.
 
 ## Postgres / PostGIS
 

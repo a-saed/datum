@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -34,6 +34,7 @@ type tableState struct {
 	isSpatial bool        // true if table has a geometry column
 	clients   map[string]*wsClient
 	mu        sync.RWMutex
+	logger    *slog.Logger
 }
 
 func (ts *tableState) addClient(c *wsClient) {
@@ -59,7 +60,7 @@ func (ts *tableState) broadcast(msg []byte, originClientID string, geomBbox [4]f
 			select {
 			case c.send <- msg:
 			default:
-				log.Printf("datum-server: client %s send buffer full, dropping delta", id)
+				ts.logger.Warn("client send buffer full, dropping delta", "client_id", id)
 			}
 		}
 	}
@@ -92,9 +93,11 @@ type server struct {
 	ipMu         sync.Mutex
 	mux          *http.ServeMux
 	verifier     Verifier
+	logger       *slog.Logger
+	pingDB       func(context.Context) error // seam for testing readiness without a live DB
 }
 
-func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin string, writeLimit int, verifier Verifier) *server {
+func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin string, writeLimit int, verifier Verifier, logger *slog.Logger) *server {
 	s := &server{
 		pool:       pool,
 		tables:     make(map[string]*tableState, len(tables)),
@@ -103,6 +106,8 @@ func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin str
 		port:       port,
 		mux:        http.NewServeMux(),
 		verifier:   verifier,
+		logger:     logger,
+		pingDB:     pool.Ping,
 	}
 	for _, ts := range tables {
 		s.tables[ts.name] = ts
@@ -119,7 +124,43 @@ func newServer(pool *pgxpool.Pool, tables []*tableState, port, allowedOrigin str
 		},
 	}
 	s.mux.HandleFunc("/ws", s.handleWS)
+	s.mux.HandleFunc("/healthz", s.handleHealthz)
+	s.mux.HandleFunc("/readyz", s.handleReadyz)
 	return s
+}
+
+// healthResponse is the JSON body returned by /healthz and /readyz.
+type healthResponse struct {
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+func writeHealthJSON(w http.ResponseWriter, status int, body healthResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+// handleHealthz is a liveness check: it always returns 200 if the HTTP
+// server is serving requests at all, with no dependency checks. This must
+// stay cheap and dependency-free — a transient DB outage should not cause
+// an orchestrator to restart the process and drop every WebSocket client.
+func (s *server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	writeHealthJSON(w, http.StatusOK, healthResponse{Status: "ok"})
+}
+
+// handleReadyz is a readiness check: it verifies the database is reachable
+// so an orchestrator can stop routing new connections here without killing
+// the process (see handleHealthz).
+func (s *server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := s.pingDB(ctx); err != nil {
+		s.logger.Warn("readiness check failed", "err", err)
+		writeHealthJSON(w, http.StatusServiceUnavailable, healthResponse{Status: "unavailable", Error: err.Error()})
+		return
+	}
+	writeHealthJSON(w, http.StatusOK, healthResponse{Status: "ok"})
 }
 
 // resolveTable returns the tableState for the given name, falling back to
@@ -142,7 +183,7 @@ func (s *server) run(ctx context.Context) error {
 				if ctx.Err() != nil {
 					return
 				}
-				log.Printf("datum-server: notify listener stopped: %v — retrying in 5s", err)
+				s.logger.Error("notify listener stopped, retrying", "err", err, "retry_in", "5s")
 				time.Sleep(5 * time.Second)
 			}
 		}
@@ -185,7 +226,7 @@ func verifyToken(v Verifier, token string) (map[string]any, error) {
 func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("datum-server: ws upgrade: %v", err)
+		s.logger.Warn("websocket upgrade failed", "err", err)
 		return
 	}
 
@@ -235,7 +276,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			// Verify token when auth is configured.
 			claims, err := verifyToken(s.verifier, msg.Token)
 			if err != nil {
-				log.Printf("datum-server: auth rejected for %s: %v", msg.ClientID, err)
+				s.logger.Warn("auth rejected", "client_id", msg.ClientID, "err", err)
 				_ = conn.WriteControl(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(4401, "unauthorized"),
@@ -247,7 +288,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			client.claims = claims
 			ts := s.resolveTable(msg.Table)
 			if ts == nil {
-				log.Printf("datum-server: client %s: unknown table %q", msg.ClientID, msg.Table)
+				s.logger.Warn("subscribe: unknown table", "client_id", msg.ClientID, "table", msg.Table)
 				continue
 			}
 
@@ -263,7 +304,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			client.table = ts.name
 			// Validate bbox based on table's spatial mode.
 			if ts.isSpatial && msg.BBox == nil {
-				log.Printf("datum-server: client %s: spatial table %q requires a bbox", msg.ClientID, ts.name)
+				s.logger.Warn("subscribe: spatial table requires a bbox", "client_id", msg.ClientID, "table", ts.name)
 				_ = conn.WriteControl(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(4400, "spatial table requires a bbox"),
@@ -273,7 +314,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if !ts.isSpatial && msg.BBox != nil {
-				log.Printf("datum-server: client %s: bbox ignored for non-spatial table %q", msg.ClientID, ts.name)
+				s.logger.Warn("subscribe: bbox ignored for non-spatial table", "client_id", msg.ClientID, "table", ts.name)
 			}
 			if msg.BBox != nil {
 				client.bbox = *msg.BBox
@@ -281,7 +322,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			// Validate and store predicate if provided.
 			if msg.Where != "" {
 				if err := validatePredicate(r.Context(), s.pool, ts.name, msg.Where, msg.WhereParams); err != nil {
-					log.Printf("datum-server: invalid predicate from %s: %v", msg.ClientID, err)
+					s.logger.Warn("subscribe: invalid predicate", "client_id", msg.ClientID, "err", err)
 					_ = conn.WriteControl(
 						websocket.CloseMessage,
 						websocket.FormatCloseMessage(4400, "invalid predicate"),
@@ -300,17 +341,17 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				select {
 				case client.send <- ts.schemaMsg:
 				default:
-					log.Printf("datum-server: client %s schema send buffer full", client.id)
+					s.logger.Warn("schema send buffer full", "client_id", client.id)
 				}
 			}
 
 			if err := sendSnapshot(r.Context(), s, ts, client, msg.Since); err != nil {
-				log.Printf("datum-server: snapshot error for %s: %v", client.id, err)
+				s.logger.Error("snapshot error", "client_id", client.id, "err", err)
 			}
 
 		case "write":
 			if s.writeLimit > 0 && !s.allowWrite(clientIP) {
-				log.Printf("datum-server: rate limit exceeded for %s", clientIP)
+				s.logger.Warn("rate limit exceeded", "client_ip", clientIP)
 				continue
 			}
 			var msg WriteMessage
@@ -319,12 +360,12 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 			ts := s.resolveTable(msg.Table)
 			if ts == nil {
-				log.Printf("datum-server: client %s: unknown table %q for write", client.id, msg.Table)
+				s.logger.Warn("write: unknown table", "client_id", client.id, "table", msg.Table)
 				continue
 			}
 			writeIDs, err := applyWrites(r.Context(), s, ts, client.id, client.claims, msg.Edits)
 			if err != nil {
-				log.Printf("datum-server: write error for %s: %v", client.id, err)
+				s.logger.Error("write error", "client_id", client.id, "err", err)
 				continue
 			}
 			if len(writeIDs) > 0 {
@@ -333,7 +374,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 					select {
 					case client.send <- b:
 					default:
-						log.Printf("datum-server: client %s ack buffer full", client.id)
+						s.logger.Warn("ack buffer full", "client_id", client.id)
 					}
 				}
 			}
@@ -345,7 +386,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 			claims, err := verifyToken(s.verifier, msg.Token)
 			if err != nil {
-				log.Printf("datum-server: token refresh rejected for %s: %v", client.id, err)
+				s.logger.Warn("token refresh rejected", "client_id", client.id, "err", err)
 				_ = conn.WriteControl(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(4401, "token refresh failed"),
@@ -360,7 +401,7 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			client.claims = claims
-			log.Printf("datum-server: token refreshed for %s", client.id)
+			s.logger.Info("token refreshed", "client_id", client.id)
 		}
 	}
 }

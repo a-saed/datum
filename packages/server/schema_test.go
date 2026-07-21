@@ -15,7 +15,7 @@ func TestNormalizeType(t *testing.T) {
 		{"unknown_xyz", "text"}, // fallback
 	}
 	for _, c := range cases {
-		got := normalizeType(c.in)
+		got, _ := normalizeType(c.in)
 		if got != c.want {
 			t.Errorf("normalizeType(%q) = %q, want %q", c.in, got, c.want)
 		}

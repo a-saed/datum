@@ -12,6 +12,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
+- **Server observability** — `/healthz` (liveness) and `/readyz` (readiness, checks Postgres connectivity) HTTP endpoints for orchestrator health probes. All server logging converted to structured JSON via `log/slog`, with verbosity controlled by `LOG_LEVEL`. No new dependencies.
 - **MCP server (`datum-mcp`)** — exposes a connected DatumClient as a [Model Context Protocol](https://modelcontextprotocol.io) stdio server. AI agents (Claude Desktop, Cursor, Windsurf) can query synced PostGIS data with natural language: `query` (full SQL + PostGIS), `get_schema`, `get_status`. Read-only by default; opt-in writes with `--allow-writes`. Zero impact on existing users — shipped as a separate `datum-sync/mcp` entrypoint and `datum-mcp` CLI binary.
 - **Live bbox tracking / `mapBbox()` (v0.12.0)** — eliminates map viewport wiring boilerplate. `bbox: mapBbox(map)` auto-tracks map moves for MapLibre, Mapbox GL, and Leaflet. Custom `event`/`getBbox` overrides for Google Maps, OpenLayers, and others. `useMapBbox(map)` React hook. Static `bbox` arrays still work unchanged.
 - **Gone notifications (v0.11.1)** — when a row is updated and no longer matches a client's `where` predicate, a synthetic delete delta is sent automatically. Stale rows are removed from local PGlite immediately without requiring a reconnect. Server-only patch.

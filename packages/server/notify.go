@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/jackc/pgx/v5"
@@ -24,7 +23,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 		return fmt.Errorf("LISTEN: %w", err)
 	}
 
-	log.Println("datum-server: listening for datum_changes notifications")
+	s.logger.Info("listening for datum_changes notifications")
 
 	for {
 		notification, err := conn.WaitForNotification(ctx)
@@ -37,7 +36,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 
 		var payload NotifyPayload
 		if err := json.Unmarshal([]byte(notification.Payload), &payload); err != nil {
-			log.Printf("datum-server: malformed notify payload: %v", err)
+			s.logger.Error("malformed notify payload", "err", err)
 			continue
 		}
 
@@ -65,7 +64,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 
 		ts := s.tables[payload.Table]
 		if ts == nil {
-			log.Printf("datum-server: notify for unknown table %q, ignoring", payload.Table)
+			s.logger.Warn("notify for unknown table, ignoring", "table", payload.Table)
 			continue
 		}
 
@@ -114,7 +113,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			if cand.client.where != "" {
 				matched, err := checkPredicateMatch(ctx, s.pool, ts, featureID, cand.client.where, cand.client.whereParams)
 				if err != nil {
-					log.Printf("datum-server: predicate check error for client %s: %v", cand.id, err)
+					s.logger.Error("predicate check error", "client_id", cand.id, "err", err)
 					continue
 				}
 				if !matched {
@@ -132,7 +131,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 							select {
 							case cand.client.send <- goneMsg:
 							default:
-								log.Printf("datum-server: client %s send buffer full, dropping gone notification", cand.id)
+								s.logger.Warn("client send buffer full, dropping gone notification", "client_id", cand.id)
 							}
 						}
 					}
@@ -145,7 +144,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			if s.verifier != nil && cand.client.claims != nil && payload.Op != "delete" {
 				allowed, rlsErr := checkRLSAccess(ctx, s.pool, ts, featureID, cand.client.claims)
 				if rlsErr != nil {
-					log.Printf("datum-server: RLS check error for client %s: %v", cand.id, rlsErr)
+					s.logger.Error("RLS check error", "client_id", cand.id, "err", rlsErr)
 					// fail-open: send the delta despite the error
 				} else if !allowed {
 					continue
@@ -155,7 +154,7 @@ func listenForNotifications(ctx context.Context, s *server) error {
 			select {
 			case cand.client.send <- msg:
 			default:
-				log.Printf("datum-server: client %s send buffer full, dropping delta", cand.id)
+				s.logger.Warn("client send buffer full, dropping delta", "client_id", cand.id)
 			}
 		}
 	}

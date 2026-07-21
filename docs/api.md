@@ -481,6 +481,9 @@ All config file fields can be overridden via env vars — useful for Docker and 
 | `COL_UPDATED_AT` | `table.col_updated_at` | `updated_at` |
 | `COL_PROPERTIES` | `table.col_properties` | `properties` |
 | `JWT_SECRET` | — (env only) | — |
+| `LOG_LEVEL` | — (env only) | `info` |
+
+`LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`. Logs are structured JSON written to stdout.
 
 **Example (Docker with env vars):**
 ```bash
@@ -490,6 +493,16 @@ docker run \
   -e ALLOWED_ORIGIN=https://myapp.com \
   ghcr.io/a-saed/datum-server
 ```
+
+### HTTP endpoints
+
+| Endpoint | Purpose | Response |
+|---|---|---|
+| `/healthz` | Liveness — is the process up? No dependency checks. | `200` always, `{"status":"ok"}` |
+| `/readyz` | Readiness — can the server reach Postgres? | `200 {"status":"ok"}` if reachable, `503 {"status":"unavailable","error":"..."}` if not (checked with a 2s timeout) |
+| `/ws` | WebSocket sync connection. | See below. |
+
+Use `/healthz` for liveness probes and `/readyz` for readiness probes. Keeping these separate matters under Kubernetes: datum-server holds WebSocket clients in memory, so a transient Postgres outage should stop new traffic from being routed here (`/readyz` fails) without killing the pod and dropping every existing connection (`/healthz` stays healthy).
 
 ---
 

@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,36 +24,36 @@ type SchemaMessage struct {
 }
 
 // normalizeType maps a Postgres typname (from pg_catalog) to the normalised
-// pg_type string sent to clients. Unknown types fall back to "text".
-func normalizeType(pgTypeName string) string {
+// pg_type string sent to clients. Unknown types fall back to "text"; known
+// reports whether pgTypeName was recognised (false on the fallback path).
+func normalizeType(pgTypeName string) (pgType string, known bool) {
 	switch pgTypeName {
 	case "text", "varchar", "bpchar", "char":
-		return "text"
+		return "text", true
 	case "int2", "int4", "int8":
-		return "int8"
+		return "int8", true
 	case "float4", "float8", "numeric":
-		return "float8"
+		return "float8", true
 	case "bool":
-		return "bool"
+		return "bool", true
 	case "uuid":
-		return "uuid"
+		return "uuid", true
 	case "jsonb", "json":
-		return "jsonb"
+		return "jsonb", true
 	case "timestamptz", "timestamp":
-		return "timestamptz"
+		return "timestamptz", true
 	case "date":
-		return "date"
+		return "date", true
 	case "geometry":
-		return "geometry"
+		return "geometry", true
 	default:
-		log.Printf("WARN datum-server: unknown postgres type %q — treating as text", pgTypeName)
-		return "text"
+		return "text", false
 	}
 }
 
 // introspectSchema queries pg_catalog for the table's columns and assigns
 // roles from ColumnConfig. Returns columns in attnum order.
-func introspectSchema(ctx context.Context, pool *pgxpool.Pool, tableName string, cols ColumnConfig) ([]ColumnDef, error) {
+func introspectSchema(ctx context.Context, pool *pgxpool.Pool, tableName string, cols ColumnConfig, logger *slog.Logger) ([]ColumnDef, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT
 		    a.attname        AS name,
@@ -82,7 +82,10 @@ func introspectSchema(ctx context.Context, pool *pgxpool.Pool, tableName string,
 		if err := rows.Scan(&name, &rawType, &nullable); err != nil {
 			return nil, fmt.Errorf("scan column: %w", err)
 		}
-		pgType := normalizeType(rawType)
+		pgType, known := normalizeType(rawType)
+		if !known {
+			logger.Warn("unknown postgres type, treating as text", "pg_type", rawType, "table", tableName)
+		}
 
 		role := "data"
 		switch {
