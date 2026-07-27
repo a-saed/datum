@@ -1,0 +1,13 @@
+{
+  "name": "datum-server-linux-x64",
+  "version": "0.1.0",
+  "description": "Precompiled datum-server binary for linux-x64. Installed automatically as an optional dependency of datum-cli — not intended for direct use.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a-saed/datum.git"
+  },
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "files": ["bin"]
+}

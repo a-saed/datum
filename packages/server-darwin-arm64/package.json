@@ -1,0 +1,13 @@
+{
+  "name": "datum-server-darwin-arm64",
+  "version": "0.1.0",
+  "description": "Precompiled datum-server binary for darwin-arm64. Installed automatically as an optional dependency of datum-cli — not intended for direct use.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a-saed/datum.git"
+  },
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin"]
+}
