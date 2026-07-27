@@ -1,3 +1,4 @@
+// packages/cli/tests/platform.test.ts
 import { describe, it, expect } from 'vitest'
 import { currentPlatformKey, resolveServerBinary } from '../src/platform.js'
 

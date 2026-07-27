@@ -1,3 +1,4 @@
+// packages/cli/src/platform.ts
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
