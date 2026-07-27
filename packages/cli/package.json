@@ -22,7 +22,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && chmod +x dist/cli.js 2>/dev/null || true",
+    "build": "tsc && (chmod +x dist/cli.js 2>/dev/null || true)",
     "test": "vitest run"
   },
   "dependencies": {
