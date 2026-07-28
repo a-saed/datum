@@ -38,3 +38,27 @@ jobs:
       - name: Test
         run: go test ./...
         working-directory: packages/server
+
+  cli:
+    name: CLI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # ubuntu-latest runners ship Docker and Go, so the CLI's Docker-tier integration test
+      # runs for real here (it skips cleanly wherever either prerequisite is missing).
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: packages/server/go.sum
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test -w datum-cli
