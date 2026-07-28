@@ -39,7 +39,12 @@ export async function startDockerPostgres(
     'postgis/postgis:16-3.4',
   ])
 
-  await waitForReady(containerName, exec, opts.pollIntervalMs ?? 500, opts.readyTimeoutMs ?? 30_000)
+  try {
+    await waitForReady(containerName, exec, opts.pollIntervalMs ?? 500, opts.readyTimeoutMs ?? 30_000)
+  } catch (err) {
+    await exec('docker', ['stop', containerName]).catch(() => {})
+    throw err
+  }
 
   return {
     connectionString: `postgres://datum:datum@127.0.0.1:${port}/datum`,

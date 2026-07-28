@@ -66,6 +66,21 @@ describe('startDockerPostgres', () => {
       startDockerPostgres({ port: 5433, exec, pollIntervalMs: 1, readyTimeoutMs: 5 })
     ).rejects.toThrow(/did not become ready/)
   })
+
+  it('stops the orphaned container if it never becomes ready', async () => {
+    let containerName = ''
+    const exec: Exec = vi.fn(async (_cmd, args) => {
+      if (args[0] === 'run') containerName = args[args.indexOf('--name') + 1]
+      if (args[0] === 'exec') throw new Error('not ready')
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      startDockerPostgres({ port: 5433, exec, pollIntervalMs: 1, readyTimeoutMs: 5 })
+    ).rejects.toThrow(/did not become ready/)
+
+    expect(exec).toHaveBeenCalledWith('docker', ['stop', containerName])
+  })
 })
 
 describe('stopDockerPostgres', () => {
