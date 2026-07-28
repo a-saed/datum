@@ -33,14 +33,12 @@ describe('runDev', () => {
 
     await runDev({
       databaseUrl: 'postgres://x',
-      dataDir: tmp,
       statePath,
       log: vi.fn(),
       resolvePostgres,
       resolveServerBinary,
       spawnServerBinary,
       stopDockerPostgres: vi.fn(),
-      stopEmbeddedPostgres: vi.fn(),
     })
 
     expect(spawnServerBinary).toHaveBeenCalledWith('/fake/datum-server', { DATABASE_URL: 'postgres://x' })
@@ -65,14 +63,12 @@ describe('runDev', () => {
     })
 
     await runDev({
-      dataDir: tmp,
       statePath,
       log: vi.fn(),
       resolvePostgres,
       resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
       spawnServerBinary,
       stopDockerPostgres: vi.fn(),
-      stopEmbeddedPostgres: vi.fn(),
     })
 
     expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({
@@ -94,24 +90,20 @@ describe('runDev', () => {
       throw new Error('boom: binary not found')
     })
     const stopDockerPostgres = vi.fn().mockResolvedValue(undefined)
-    const stopEmbeddedPostgres = vi.fn()
 
     await expect(
       runDev({
-        dataDir: tmp,
         statePath,
         log: vi.fn(),
         resolvePostgres,
         resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
         spawnServerBinary,
         stopDockerPostgres,
-        stopEmbeddedPostgres,
       })
     ).rejects.toThrow('boom: binary not found')
 
     expect(stopDockerPostgres).toHaveBeenCalledWith('datum-dev-postgres-1')
     expect(stopDockerPostgres).toHaveBeenCalledTimes(1)
-    expect(stopEmbeddedPostgres).not.toHaveBeenCalled()
   })
 
   it('stops the Postgres tier exactly once when SIGINT arrives before the child closes', async () => {
@@ -137,14 +129,12 @@ describe('runDev', () => {
     const baselineListeners = process.listenerCount('SIGINT')
 
     const runPromise = runDev({
-      dataDir: tmp,
       statePath,
       log: vi.fn(),
       resolvePostgres,
       resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
       spawnServerBinary,
       stopDockerPostgres,
-      stopEmbeddedPostgres: vi.fn(),
     })
 
     // Let runDev's awaits (Postgres resolution, state file write — real fs I/O) run to

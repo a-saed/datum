@@ -7,7 +7,6 @@ import { runDev } from './commands/dev.js'
 import { runStop } from './commands/stop.js'
 import { runInit } from './commands/init.js'
 import { stopDockerPostgres } from './docker.js'
-import { stopEmbeddedPostgres } from './embedded.js'
 import { CLI_VERSION } from './version.js'
 
 export type ParsedCommand =
@@ -29,7 +28,6 @@ export function parseCommand(args: string[]): ParsedCommand {
 }
 
 const STATE_PATH = path.join(os.homedir(), '.datum', 'dev-state.json')
-const DATA_DIR = path.join(os.homedir(), '.datum', 'postgres-data')
 
 async function main() {
   const parsed = parseCommand(process.argv.slice(2))
@@ -39,11 +37,9 @@ async function main() {
     case 'dev':
       await runDev({
         databaseUrl: parsed.databaseUrl ?? process.env.DATABASE_URL,
-        dataDir: DATA_DIR,
         statePath: STATE_PATH,
         log,
         stopDockerPostgres,
-        stopEmbeddedPostgres,
       })
       break
     case 'stop':

@@ -1,15 +1,14 @@
 // packages/cli/src/commands/dev.ts
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { resolvePostgres as resolvePostgresDefault, type PostgresSource } from '../postgresChain.js'
 import { resolveServerBinary as resolveServerBinaryDefault } from '../platform.js'
 import { spawnServerBinary as spawnServerBinaryDefault } from '../server.js'
 import { isDockerAvailable as isDockerAvailableDefault, startDockerPostgres as startDockerPostgresDefault, stopDockerPostgres as stopDockerPostgresDefault } from '../docker.js'
-import { startEmbeddedPostgres as startEmbeddedPostgresDefault, stopEmbeddedPostgres as stopEmbeddedPostgresDefault } from '../embedded.js'
 
 export interface DevState {
-  kind: 'docker' | 'embedded' | 'byo'
+  kind: 'docker' | 'byo'
   containerName?: string
 }
 
@@ -28,7 +27,6 @@ export async function readStateFile(statePath: string): Promise<DevState | undef
 
 export interface RunDevOptions {
   databaseUrl?: string
-  dataDir: string
   statePath: string
   log: (msg: string) => void
   resolvePostgres?: typeof resolvePostgresDefault
@@ -36,9 +34,7 @@ export interface RunDevOptions {
   spawnServerBinary?: typeof spawnServerBinaryDefault
   isDockerAvailable?: typeof isDockerAvailableDefault
   startDockerPostgres?: typeof startDockerPostgresDefault
-  startEmbeddedPostgres?: typeof startEmbeddedPostgresDefault
   stopDockerPostgres: typeof stopDockerPostgresDefault
-  stopEmbeddedPostgres: typeof stopEmbeddedPostgresDefault
 }
 
 export async function runDev(opts: RunDevOptions): Promise<void> {
@@ -48,11 +44,9 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
 
   const source: PostgresSource = await resolvePostgres({
     databaseUrl: opts.databaseUrl,
-    dataDir: opts.dataDir,
     log: opts.log,
     isDockerAvailable: opts.isDockerAvailable ?? isDockerAvailableDefault,
     startDockerPostgres: opts.startDockerPostgres ?? startDockerPostgresDefault,
-    startEmbeddedPostgres: opts.startEmbeddedPostgres ?? startEmbeddedPostgresDefault,
   })
 
   // Idempotent: safe to call more than once (e.g. once from a SIGINT/SIGTERM handler and
@@ -62,7 +56,6 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
     if (cleanedUp) return
     cleanedUp = true
     if (source.kind === 'docker') await opts.stopDockerPostgres(source.containerName)
-    if (source.kind === 'embedded') await opts.stopEmbeddedPostgres(source.instance)
   }
 
   let sigintHandler: (() => void) | undefined

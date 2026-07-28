@@ -25,11 +25,6 @@
     "build": "tsc && (chmod +x dist/cli.js 2>/dev/null || true)",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@electric-sql/pglite": "^0.4.6",
-    "@electric-sql/pglite-postgis": "^0.0.8",
-    "@electric-sql/pglite-socket": "^0.2.7"
-  },
   "optionalDependencies": {
     "datum-server-linux-x64": "0.1.0",
     "datum-server-linux-arm64": "0.1.0",
@@ -38,8 +33,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "pg": "^8.13.0",
-    "@types/pg": "^8.11.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   }
