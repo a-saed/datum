@@ -4,8 +4,8 @@ Get datum running locally in under 5 minutes.
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - [Node.js](https://nodejs.org/) 20 or later
+- [Docker](https://docs.docker.com/get-docker/) (optional — only for the Docker Compose path)
 
 ## CLI
 
