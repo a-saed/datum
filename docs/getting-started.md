@@ -5,14 +5,14 @@ Get datum running locally in under 5 minutes.
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 20 or later
-- [Docker](https://docs.docker.com/get-docker/) (optional — only for the Docker Compose path)
+- [Docker](https://docs.docker.com/get-docker/) — either for the Docker Compose path below, or so `npx datum-cli dev` can run Postgres for you. Not required if you already have a Postgres database to point `datum-cli dev --db` at.
 
 ## CLI
 
-`datum-cli` runs a local Postgres + `datum-server` with no Docker or Go toolchain required.
+`datum-cli` runs a local `datum-server` with no Go toolchain required.
 
 - `npx datum-cli init` — interactively generates a starter `datum.yaml`.
-- `npx datum-cli dev` — starts Postgres (BYO via `--db`/`DATABASE_URL`, else Docker if running, else an embedded fallback) and `datum-server` together.
+- `npx datum-cli dev` — resolves Postgres (BYO via `--db`/`DATABASE_URL`, else Docker) and runs `datum-server` together. If neither is available, it exits with an error explaining how to fix that.
 - `npx datum-cli stop` — tears down whatever `dev` started.
 
 ## 1. Start PostGIS and datum-server

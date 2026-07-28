@@ -2,6 +2,9 @@
 
 ## Medium priority
 
+### Embedded (no-Docker) Postgres for `datum dev`
+`datum-cli dev` currently falls back through BYO `DATABASE_URL` → Docker → a clear error when neither is available. An embedded, no-Docker Postgres tier (PGlite-backed) was built and then removed before release: pglite-socket 0.2.7 multiplexes concurrent connections (`maxConnections`) over its wire-protocol socket server, but does not forward Postgres `LISTEN`/`NOTIFY` over that wire protocol in any form (async push, piggyback-on-next-query, and self-delivery were all tried — nothing arrived at the client). `datum-server`'s change detection requires a real wire-protocol `LISTEN` on a dedicated connection (`notify.go`), so live sync could never work on this tier. Viable once either pglite-socket forwards notifications end-to-end, or datum-server gains a poll-based change-detection mode as an alternative to `LISTEN`/`NOTIFY` (which would also be valuable for deployments behind PgBouncer in transaction-pooling mode, where `LISTEN` doesn't work either).
+
 ### Webhook auth mode
 `auth.mode: webhook` — datum calls your app's endpoint to verify opaque tokens (session cookies, API keys) or perform real-time revocation checks. Config key `auth.webhook_url` reserved. JWT mode covers most cases.
 
@@ -12,7 +15,7 @@ Today datum uses last-write-wins based on `updated_at`. For collaborative editin
 
 ## Recently shipped
 
-- **Zero-install CLI (`datum-cli`)** — `npx datum-cli dev` runs a local Postgres+PostGIS and `datum-server` together with no Docker or Go toolchain required. Falls back through BYO `DATABASE_URL` → Docker → an embedded PGlite-backed Postgres. `datum-cli init` generates a starter `datum.yaml`. Docker and the existing Docker image remain fully supported for production.
+- **Zero-install CLI (`datum-cli`)** — `npx datum-cli dev` runs a local Postgres+PostGIS and `datum-server` together with no Go toolchain required. Resolves Postgres via BYO `DATABASE_URL` → Docker, with a clear, actionable error if neither is available. `datum-cli init` generates a starter `datum.yaml`. Docker and the existing Docker image remain fully supported for production.
 - **Server observability** — `/healthz` (liveness) and `/readyz` (readiness, checks Postgres connectivity) HTTP endpoints for orchestrator health probes. All server logging converted to structured JSON via `log/slog`, with verbosity controlled by `LOG_LEVEL`. `/metrics` exposes Prometheus metrics — active connections, message/write/delta counts, and DB query latency, all with bounded-cardinality labels (table name, message type, result — never client ID or IP).
 - **MCP server (`datum-mcp`)** — exposes a connected DatumClient as a [Model Context Protocol](https://modelcontextprotocol.io) stdio server. AI agents (Claude Desktop, Cursor, Windsurf) can query synced PostGIS data with natural language: `query` (full SQL + PostGIS), `get_schema`, `get_status`. Read-only by default; opt-in writes with `--allow-writes`. Zero impact on existing users — shipped as a separate `datum-sync/mcp` entrypoint and `datum-mcp` CLI binary.
 - **Live bbox tracking / `mapBbox()` (v0.12.0)** — eliminates map viewport wiring boilerplate. `bbox: mapBbox(map)` auto-tracks map moves for MapLibre, Mapbox GL, and Leaflet. Custom `event`/`getBbox` overrides for Google Maps, OpenLayers, and others. `useMapBbox(map)` React hook. Static `bbox` arrays still work unchanged.

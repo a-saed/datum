@@ -30,7 +30,7 @@ import { useDatum } from 'datum-sync/react' // optional React hook
 
 ## Quick start (5 minutes)
 
-**Prerequisites:** Node.js 20+ (Docker optional)
+**Prerequisites:** Node.js 20+, plus either Docker or an existing Postgres database
 
 **1. Start Postgres + datum-server**
 
@@ -38,7 +38,21 @@ import { useDatum } from 'datum-sync/react' // optional React hook
 npx datum-cli dev
 ```
 
-No `DATABASE_URL`? This starts a local Postgres automatically — via Docker if it's running, or a bundled embedded Postgres if not. Already have a database? `npx datum-cli dev --db postgres://...` connects directly.
+No `DATABASE_URL`? datum starts Postgres for you via Docker. Already have a database? `npx datum-cli dev --db postgres://...` connects directly.
+
+**2. Install and run the demo**
+
+```bash
+npm install
+npm run build -w datum-sync
+npm run dev -w datum-demo
+```
+
+Open http://localhost:5173. Click the map to add features. Watch them sync.
+
+**3. Verify sync**
+
+Open a second browser tab — features added in one tab appear in the other within a few seconds.
 
 _Prefer Docker Compose instead? See below._
 
