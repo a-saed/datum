@@ -1,6 +1,6 @@
 // packages/cli/tests/stop.test.ts
 import { describe, it, expect, vi } from 'vitest'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { writeStateFile } from '../src/commands/dev.js'
@@ -40,5 +40,19 @@ describe('runStop', () => {
 
     expect(result).toBe('stopped')
     expect(stopDockerPostgres).not.toHaveBeenCalled()
+  })
+
+  it('still reports stopped and removes the state file when the container is already gone', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-stop-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    await writeStateFile(statePath, { kind: 'docker', containerName: 'datum-dev-postgres-1' })
+    const stopDockerPostgres = vi.fn().mockRejectedValue(new Error('No such container'))
+    const log = vi.fn()
+
+    const result = await runStop({ statePath, log, stopDockerPostgres })
+
+    expect(result).toBe('stopped')
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('failed to stop Docker container'))
+    expect(existsSync(statePath)).toBe(false)
   })
 })

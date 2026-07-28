@@ -58,6 +58,9 @@ export async function runDev(opts: RunDevOptions): Promise<number> {
     if (cleanedUp) return
     cleanedUp = true
     if (source.kind === 'docker') await opts.stopDockerPostgres(source.containerName)
+    // Best-effort: a later `datum stop` should see "nothing to stop" once `dev` has already
+    // torn everything down, rather than trying (and failing) to stop an already-gone container.
+    await unlink(opts.statePath).catch(() => {})
   }
 
   let sigintHandler: (() => void) | undefined

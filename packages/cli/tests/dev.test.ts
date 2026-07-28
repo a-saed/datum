@@ -21,12 +21,16 @@ describe('runDev', () => {
 
     const resolvePostgres = vi.fn().mockResolvedValue({ kind: 'byo', connectionString: 'postgres://x' })
     const resolveServerBinary = vi.fn().mockReturnValue('/fake/datum-server')
-    // Emit 'close' via setImmediate, scheduled from inside the mock itself — this guarantees
-    // it fires only after runDev has synchronously registered its 'close' listener (several
-    // awaits stand between calling runDev and that registration, so emitting synchronously
-    // right after the call, before those awaits resolve, would fire with no listener attached
-    // and hang the test until timeout).
+    // Snapshot the state file's contents from inside the spawn mock — i.e. after runDev has
+    // written it but before the child (and therefore cleanup, which now unlinks the state file
+    // — see the "removes the state file" test below) closes. Emitting 'close' via setImmediate,
+    // scheduled from inside the mock itself, also guarantees it fires only after runDev has
+    // synchronously registered its 'close' listener (several awaits stand between calling runDev
+    // and that registration, so emitting synchronously right after the call, before those awaits
+    // resolve, would fire with no listener attached and hang the test until timeout).
+    let stateWhileRunning: unknown
     const spawnServerBinary = vi.fn().mockImplementation(() => {
+      stateWhileRunning = JSON.parse(readFileSync(statePath, 'utf-8'))
       setImmediate(() => child.emit('close', 0))
       return child
     })
@@ -42,9 +46,35 @@ describe('runDev', () => {
     })
 
     expect(spawnServerBinary).toHaveBeenCalledWith('/fake/datum-server', { DATABASE_URL: 'postgres://x' })
-    expect(existsSync(statePath)).toBe(true)
-    expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({ kind: 'byo' })
+    expect(stateWhileRunning).toEqual({ kind: 'byo' })
     expect(exitCode).toBe(0)
+  })
+
+  it('removes the state file once the child exits normally', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    const child = fakeChild()
+
+    const resolvePostgres = vi.fn().mockResolvedValue({
+      kind: 'docker',
+      connectionString: 'postgres://datum:datum@127.0.0.1:5433/datum',
+      containerName: 'datum-dev-postgres-1',
+    })
+    const spawnServerBinary = vi.fn().mockImplementation(() => {
+      setImmediate(() => child.emit('close', 0))
+      return child
+    })
+
+    await runDev({
+      statePath,
+      log: vi.fn(),
+      resolvePostgres,
+      resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+      spawnServerBinary,
+      stopDockerPostgres: vi.fn().mockResolvedValue(undefined),
+    })
+
+    expect(existsSync(statePath)).toBe(false)
   })
 
   it('resolves with the child process exit code when it closes non-zero', async () => {
@@ -147,7 +177,12 @@ describe('runDev', () => {
       containerName: 'datum-dev-postgres-1',
     })
 
+    // Snapshot the state file's contents before the child closes (and cleanup — which now
+    // unlinks the state file — runs). See the "removes the state file" test below for the
+    // post-cleanup lifecycle assertion.
+    let stateWhileRunning: unknown
     const spawnServerBinary = vi.fn().mockImplementation(() => {
+      stateWhileRunning = JSON.parse(readFileSync(statePath, 'utf-8'))
       setImmediate(() => child.emit('close', 0))
       return child
     })
@@ -161,7 +196,7 @@ describe('runDev', () => {
       stopDockerPostgres: vi.fn(),
     })
 
-    expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({
+    expect(stateWhileRunning).toEqual({
       kind: 'docker',
       containerName: 'datum-dev-postgres-1',
     })

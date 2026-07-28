@@ -19,7 +19,15 @@ export async function runStop(opts: RunStopOptions): Promise<'stopped' | 'nothin
   if (state.kind === 'docker' && state.containerName) {
     const stopDockerPostgres = opts.stopDockerPostgres ?? stopDockerPostgresDefault
     opts.log(`stopping Docker container ${state.containerName}`)
-    await stopDockerPostgres(state.containerName)
+    try {
+      await stopDockerPostgres(state.containerName)
+    } catch (err) {
+      // The container may already be gone (e.g. `datum dev` already tore it down on Ctrl-C) —
+      // that shouldn't leave a stale state file that fails every subsequent `datum stop`.
+      opts.log(
+        `warning: failed to stop Docker container ${state.containerName}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
   }
 
   await unlink(opts.statePath).catch(() => {})
