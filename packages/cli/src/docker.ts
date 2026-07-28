@@ -31,7 +31,7 @@ export async function startDockerPostgres(
 
   await exec('docker', [
     'run', '-d', '--rm',
-    '-p', `${port}:5432`,
+    '-p', `127.0.0.1:${port}:5432`,
     '-e', 'POSTGRES_USER=datum',
     '-e', 'POSTGRES_PASSWORD=datum',
     '-e', 'POSTGRES_DB=datum',

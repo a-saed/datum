@@ -32,7 +32,7 @@ describe('startDockerPostgres', () => {
     const runCall = calls.find(c => c[1] === 'run')
     expect(runCall).toEqual([
       'docker', 'run', '-d', '--rm',
-      '-p', '5433:5432',
+      '-p', '127.0.0.1:5433:5432',
       '-e', 'POSTGRES_USER=datum',
       '-e', 'POSTGRES_PASSWORD=datum',
       '-e', 'POSTGRES_DB=datum',
