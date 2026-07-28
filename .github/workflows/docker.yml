@@ -6,58 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  cross-compile-server:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            package: server-linux-x64
-          - goos: linux
-            goarch: arm64
-            package: server-linux-arm64
-          - goos: darwin
-            goarch: amd64
-            package: server-darwin-x64
-          - goos: darwin
-            goarch: arm64
-            package: server-darwin-arm64
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache-dependency-path: packages/server/go.sum
-
-      - name: Build
-        working-directory: packages/server
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
-        run: go build -o ../${{ matrix.package }}/bin/datum-server .
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Extract version
-        id: version
-        run: echo "tag=$(node -p "require('./packages/cli/package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Set package version
-        working-directory: packages/${{ matrix.package }}
-        run: npm version ${{ steps.version.outputs.tag }} --no-git-tag-version --allow-same-version
-
-      - name: Publish
-        working-directory: packages/${{ matrix.package }}
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
