@@ -2,6 +2,7 @@
 import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { realpathSync } from 'node:fs'
 import { runDev } from './commands/dev.js'
 import { runStop } from './commands/stop.js'
 import { runInit } from './commands/init.js'
@@ -61,7 +62,12 @@ async function main() {
 
 // Only run when executed directly (e.g. `node dist/cli.js`), not when imported — this file is
 // imported by tests to exercise `parseCommand` without triggering the whole CLI dispatch.
-const isMain = process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url)
+// `process.argv[1]` is resolved with `realpathSync` because npm's `bin` entry (`datum` ->
+// `dist/cli.js`) is installed as a symlink: Node does not resolve symlinks for `process.argv[1]`,
+// but `import.meta.url` always reflects the real (resolved) path, so comparing them unresolved
+// would never match when the CLI is actually run via its installed `datum` bin.
+const isMain =
+  process.argv[1] !== undefined && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
 if (isMain) {
   main().catch(err => {
     process.stderr.write(`datum: ${err instanceof Error ? err.message : String(err)}\n`)
