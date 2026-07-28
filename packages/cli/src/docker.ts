@@ -61,7 +61,15 @@ async function waitForReady(
   const deadline = Date.now() + timeoutMs
   for (;;) {
     try {
-      await exec('docker', ['exec', containerName, 'pg_isready', '-U', 'datum'])
+      // -h 127.0.0.1 forces a TCP check against the real listener. The postgis/postgis
+      // entrypoint runs an ephemeral init-scripts server first that only accepts local Unix
+      // socket connections (listen_addresses=''), then restarts as the real server bound to
+      // 0.0.0.0 — `pg_isready` with no -h defaults to the Unix socket and reports ready during
+      // that ephemeral phase, right before it shuts down for the restart. A client (including
+      // datum-server) that then dials the container immediately can land on that shutdown and
+      // see the connection reset. Forcing TCP here means readiness isn't reported until the
+      // real server — the one this connection string actually points at — is listening.
+      await exec('docker', ['exec', containerName, 'pg_isready', '-U', 'datum', '-h', '127.0.0.1'])
       return
     } catch {
       if (Date.now() >= deadline) {
