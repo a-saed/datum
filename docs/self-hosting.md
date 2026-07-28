@@ -11,6 +11,8 @@ datum-server is configured via a `datum.yaml` file and/or environment variables.
 
 Everything else — port, origin, tables, column names — goes in `datum.yaml` or as env vars. See [API Reference → datum-server](/api#datum-server-go-binary) for the full config reference.
 
+> **Local development:** for a zero-config local setup, see `npx datum-cli dev` in the [Getting Started](/getting-started) guide. The instructions below cover production deployment.
+
 ## Docker
 
 datum-server is distributed as a Docker image: `ghcr.io/a-saed/datum-server`.
