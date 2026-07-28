@@ -77,6 +77,36 @@ describe('runDev', () => {
     expect(existsSync(statePath)).toBe(false)
   })
 
+  it('still removes the state file when stopDockerPostgres rejects during cleanup', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    const child = fakeChild()
+
+    const resolvePostgres = vi.fn().mockResolvedValue({
+      kind: 'docker',
+      connectionString: 'postgres://datum:datum@127.0.0.1:5433/datum',
+      containerName: 'datum-dev-postgres-1',
+    })
+    const spawnServerBinary = vi.fn().mockImplementation(() => {
+      setImmediate(() => child.emit('close', 0))
+      return child
+    })
+    const log = vi.fn()
+
+    const exitCode = await runDev({
+      statePath,
+      log,
+      resolvePostgres,
+      resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+      spawnServerBinary,
+      stopDockerPostgres: vi.fn().mockRejectedValue(new Error('No such container')),
+    })
+
+    expect(exitCode).toBe(0)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('failed to stop Docker container'))
+    expect(existsSync(statePath)).toBe(false)
+  })
+
   it('resolves with the child process exit code when it closes non-zero', async () => {
     const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
     const statePath = path.join(tmp, 'dev-state.json')

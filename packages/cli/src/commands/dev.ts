@@ -57,7 +57,17 @@ export async function runDev(opts: RunDevOptions): Promise<number> {
   const cleanup = async (): Promise<void> => {
     if (cleanedUp) return
     cleanedUp = true
-    if (source.kind === 'docker') await opts.stopDockerPostgres(source.containerName)
+    if (source.kind === 'docker') {
+      try {
+        await opts.stopDockerPostgres(source.containerName)
+      } catch (err) {
+        // The container may already be gone (e.g. a previous `dev` already tore it down) —
+        // that shouldn't stop us from unlinking the state file below.
+        opts.log(
+          `warning: failed to stop Docker container ${source.containerName}: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }
     // Best-effort: a later `datum stop` should see "nothing to stop" once `dev` has already
     // torn everything down, rather than trying (and failing) to stop an already-gone container.
     await unlink(opts.statePath).catch(() => {})
