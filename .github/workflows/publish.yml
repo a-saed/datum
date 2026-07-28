@@ -125,7 +125,21 @@ jobs:
         run: npm run build
         working-directory: packages/client
 
+      - name: Check if client already published
+        id: check-client
+        working-directory: packages/client
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "already published $NAME@$VERSION — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
+        if: steps.check-client.outputs.skip != 'true'
         run: npm publish --access public
         working-directory: packages/client
         env:
@@ -161,7 +175,11 @@ jobs:
       - name: Tag release
         run: |
           VERSION=$(node -p "require('./packages/client/package.json').version")
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "refs/tags/v$VERSION"; then
+            echo "tag v$VERSION already exists on origin — skipping (this is expected on a CLI-only release, where the client's version hasn't changed)"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+          fi
