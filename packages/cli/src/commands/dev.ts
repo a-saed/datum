@@ -55,29 +55,57 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
     startEmbeddedPostgres: opts.startEmbeddedPostgres ?? startEmbeddedPostgresDefault,
   })
 
-  const state: DevState =
-    source.kind === 'docker'
-      ? { kind: 'docker', containerName: source.containerName }
-      : { kind: source.kind }
-  await writeStateFile(opts.statePath, state)
-
-  const binaryPath = resolveServerBinary()
-  const child: ChildProcess = spawnServerBinary(binaryPath, { DATABASE_URL: source.connectionString })
-  child.stdout?.on('data', chunk => process.stdout.write(chunk))
-  child.stderr?.on('data', chunk => process.stderr.write(chunk))
-
-  const cleanup = async () => {
+  // Idempotent: safe to call more than once (e.g. once from a SIGINT/SIGTERM handler and
+  // again from the `finally` below once the child subsequently closes).
+  let cleanedUp = false
+  const cleanup = async (): Promise<void> => {
+    if (cleanedUp) return
+    cleanedUp = true
     if (source.kind === 'docker') await opts.stopDockerPostgres(source.containerName)
     if (source.kind === 'embedded') await opts.stopEmbeddedPostgres(source.instance)
   }
 
-  process.once('SIGINT', () => { void cleanup().then(() => child.kill('SIGINT')) })
-  process.once('SIGTERM', () => { void cleanup().then(() => child.kill('SIGTERM')) })
+  let sigintHandler: (() => void) | undefined
+  let sigtermHandler: (() => void) | undefined
 
-  await new Promise<void>((resolve, reject) => {
-    child.once('error', reject)
-    child.once('close', () => resolve())
-  })
+  // Everything below can throw (writeStateFile, resolveServerBinary, spawnServerBinary) or
+  // reject (the child's 'error' event) after Postgres has already been started — the
+  // try/finally guarantees `cleanup()` still runs on any of those exit paths, not just a
+  // clean child 'close'.
+  try {
+    const state: DevState =
+      source.kind === 'docker'
+        ? { kind: 'docker', containerName: source.containerName }
+        : { kind: source.kind }
+    await writeStateFile(opts.statePath, state)
 
-  await cleanup()
+    const binaryPath = resolveServerBinary()
+    const child: ChildProcess = spawnServerBinary(binaryPath, { DATABASE_URL: source.connectionString })
+    child.stdout?.on('data', chunk => process.stdout.write(chunk))
+    child.stderr?.on('data', chunk => process.stderr.write(chunk))
+
+    const onSignal = (signal: 'SIGINT' | 'SIGTERM') => {
+      void cleanup()
+        .catch(err => opts.log(`cleanup failed: ${err instanceof Error ? err.message : String(err)}`))
+        .then(() => child.kill(signal))
+    }
+    sigintHandler = () => onSignal('SIGINT')
+    sigtermHandler = () => onSignal('SIGTERM')
+    process.once('SIGINT', sigintHandler)
+    process.once('SIGTERM', sigtermHandler)
+
+    await new Promise<void>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', () => resolve())
+    })
+  } finally {
+    if (sigintHandler) process.off('SIGINT', sigintHandler)
+    if (sigtermHandler) process.off('SIGTERM', sigtermHandler)
+    try {
+      await cleanup()
+    } catch (err) {
+      // Don't let a cleanup failure mask an in-flight exception from the try block above.
+      opts.log(`cleanup failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
 }

@@ -80,6 +80,86 @@ describe('runDev', () => {
       containerName: 'datum-dev-postgres-1',
     })
   })
+
+  it('cleans up the Postgres tier if spawning the server binary throws after Postgres resolved', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+
+    const resolvePostgres = vi.fn().mockResolvedValue({
+      kind: 'docker',
+      connectionString: 'postgres://datum:datum@127.0.0.1:5433/datum',
+      containerName: 'datum-dev-postgres-1',
+    })
+    const spawnServerBinary = vi.fn().mockImplementation(() => {
+      throw new Error('boom: binary not found')
+    })
+    const stopDockerPostgres = vi.fn().mockResolvedValue(undefined)
+    const stopEmbeddedPostgres = vi.fn()
+
+    await expect(
+      runDev({
+        dataDir: tmp,
+        statePath,
+        log: vi.fn(),
+        resolvePostgres,
+        resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+        spawnServerBinary,
+        stopDockerPostgres,
+        stopEmbeddedPostgres,
+      })
+    ).rejects.toThrow('boom: binary not found')
+
+    expect(stopDockerPostgres).toHaveBeenCalledWith('datum-dev-postgres-1')
+    expect(stopDockerPostgres).toHaveBeenCalledTimes(1)
+    expect(stopEmbeddedPostgres).not.toHaveBeenCalled()
+  })
+
+  it('stops the Postgres tier exactly once when SIGINT arrives before the child closes', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    const child = fakeChild()
+    // Simulate a real child process: it only closes once killed.
+    child.kill = vi.fn(() => {
+      setImmediate(() => child.emit('close', 0))
+    })
+
+    const resolvePostgres = vi.fn().mockResolvedValue({
+      kind: 'docker',
+      connectionString: 'postgres://datum:datum@127.0.0.1:5433/datum',
+      containerName: 'datum-dev-postgres-1',
+    })
+    const spawnServerBinary = vi.fn().mockReturnValue(child)
+    const stopDockerPostgres = vi.fn().mockResolvedValue(undefined)
+
+    const runPromise = runDev({
+      dataDir: tmp,
+      statePath,
+      log: vi.fn(),
+      resolvePostgres,
+      resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+      spawnServerBinary,
+      stopDockerPostgres,
+      stopEmbeddedPostgres: vi.fn(),
+    })
+
+    // Let runDev's awaits (Postgres resolution, state file write — real fs I/O) run to
+    // completion so its SIGINT listener is registered before we emit the signal — same
+    // reasoning as the setImmediate-inside-the-mock pattern above, just driven from the test
+    // body instead. Poll rather than a fixed number of ticks since real fs I/O timing varies.
+    for (let i = 0; i < 50 && process.listenerCount('SIGINT') === 0; i++) {
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    expect(process.listenerCount('SIGINT')).toBe(1)
+    process.emit('SIGINT')
+
+    await runPromise
+
+    expect(child.kill).toHaveBeenCalledWith('SIGINT')
+    expect(stopDockerPostgres).toHaveBeenCalledTimes(1)
+    // The SIGINT listener must be removed once runDev settles, or repeated runs would leak
+    // listeners onto the shared `process` object.
+    expect(process.listenerCount('SIGINT')).toBe(0)
+  })
 })
 
 describe('writeStateFile / readStateFile', () => {
