@@ -1,5 +1,6 @@
 // packages/cli/src/commands/dev.ts
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { resolvePostgres as resolvePostgresDefault, type PostgresSource } from '../postgresChain.js'
@@ -28,6 +29,7 @@ export async function readStateFile(statePath: string): Promise<DevState | undef
 export interface RunDevOptions {
   databaseUrl?: string
   statePath: string
+  cwd?: string
   log: (msg: string) => void
   resolvePostgres?: typeof resolvePostgresDefault
   resolveServerBinary?: typeof resolveServerBinaryDefault
@@ -72,8 +74,17 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
         : { kind: source.kind }
     await writeStateFile(opts.statePath, state)
 
+    const cwd = opts.cwd ?? process.cwd()
+    const configPath = path.join(cwd, 'datum.yaml')
+    const env: Record<string, string> = { DATABASE_URL: source.connectionString }
+    if (existsSync(configPath)) {
+      env.CONFIG = configPath
+    } else if (!process.env.TABLE) {
+      opts.log('no datum.yaml found — run `npx datum-cli init` to create one, or set the TABLE env var')
+    }
+
     const binaryPath = resolveServerBinary()
-    const child: ChildProcess = spawnServerBinary(binaryPath, { DATABASE_URL: source.connectionString })
+    const child: ChildProcess = spawnServerBinary(binaryPath, env)
     child.stdout?.on('data', chunk => process.stdout.write(chunk))
     child.stderr?.on('data', chunk => process.stderr.write(chunk))
 

@@ -1,6 +1,6 @@
 // packages/cli/tests/dev.test.ts
 import { describe, it, expect, vi } from 'vitest'
-import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
@@ -44,6 +44,71 @@ describe('runDev', () => {
     expect(spawnServerBinary).toHaveBeenCalledWith('/fake/datum-server', { DATABASE_URL: 'postgres://x' })
     expect(existsSync(statePath)).toBe(true)
     expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({ kind: 'byo' })
+  })
+
+  it('passes CONFIG to the server when a datum.yaml exists in cwd', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    const configPath = path.join(tmp, 'datum.yaml')
+    writeFileSync(configPath, 'table:\n  name: features\n', 'utf-8')
+    const child = fakeChild()
+
+    const resolvePostgres = vi.fn().mockResolvedValue({ kind: 'byo', connectionString: 'postgres://x' })
+    const spawnServerBinary = vi.fn().mockImplementation(() => {
+      setImmediate(() => child.emit('close', 0))
+      return child
+    })
+    const log = vi.fn()
+
+    await runDev({
+      databaseUrl: 'postgres://x',
+      statePath,
+      cwd: tmp,
+      log,
+      resolvePostgres,
+      resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+      spawnServerBinary,
+      stopDockerPostgres: vi.fn(),
+    })
+
+    expect(spawnServerBinary).toHaveBeenCalledWith('/fake/datum-server', {
+      DATABASE_URL: 'postgres://x',
+      CONFIG: configPath,
+    })
+    expect(log).not.toHaveBeenCalledWith(expect.stringContaining('no datum.yaml found'))
+  })
+
+  it('logs a hint and omits CONFIG when no datum.yaml exists and TABLE is unset', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    const child = fakeChild()
+
+    const resolvePostgres = vi.fn().mockResolvedValue({ kind: 'byo', connectionString: 'postgres://x' })
+    const spawnServerBinary = vi.fn().mockImplementation(() => {
+      setImmediate(() => child.emit('close', 0))
+      return child
+    })
+    const log = vi.fn()
+
+    const originalTable = process.env.TABLE
+    delete process.env.TABLE
+    try {
+      await runDev({
+        databaseUrl: 'postgres://x',
+        statePath,
+        cwd: tmp,
+        log,
+        resolvePostgres,
+        resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+        spawnServerBinary,
+        stopDockerPostgres: vi.fn(),
+      })
+    } finally {
+      if (originalTable !== undefined) process.env.TABLE = originalTable
+    }
+
+    expect(spawnServerBinary).toHaveBeenCalledWith('/fake/datum-server', { DATABASE_URL: 'postgres://x' })
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('no datum.yaml found'))
   })
 
   it('records the container name in the state file for the Docker tier', async () => {
