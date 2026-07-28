@@ -34,14 +34,16 @@ async function main() {
   const log = (msg: string) => process.stderr.write(`datum: ${msg}\n`)
 
   switch (parsed.command) {
-    case 'dev':
-      await runDev({
+    case 'dev': {
+      const code = await runDev({
         databaseUrl: parsed.databaseUrl ?? process.env.DATABASE_URL,
         statePath: STATE_PATH,
         log,
         stopDockerPostgres,
       })
+      if (code !== 0) process.exit(code)
       break
+    }
     case 'stop':
       await runStop({ statePath: STATE_PATH, log })
       break

@@ -31,7 +31,7 @@ describe('runDev', () => {
       return child
     })
 
-    await runDev({
+    const exitCode = await runDev({
       databaseUrl: 'postgres://x',
       statePath,
       log: vi.fn(),
@@ -44,6 +44,31 @@ describe('runDev', () => {
     expect(spawnServerBinary).toHaveBeenCalledWith('/fake/datum-server', { DATABASE_URL: 'postgres://x' })
     expect(existsSync(statePath)).toBe(true)
     expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({ kind: 'byo' })
+    expect(exitCode).toBe(0)
+  })
+
+  it('resolves with the child process exit code when it closes non-zero', async () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'datum-dev-test-'))
+    const statePath = path.join(tmp, 'dev-state.json')
+    const child = fakeChild()
+
+    const resolvePostgres = vi.fn().mockResolvedValue({ kind: 'byo', connectionString: 'postgres://x' })
+    const spawnServerBinary = vi.fn().mockImplementation(() => {
+      setImmediate(() => child.emit('close', 1))
+      return child
+    })
+
+    const exitCode = await runDev({
+      databaseUrl: 'postgres://x',
+      statePath,
+      log: vi.fn(),
+      resolvePostgres,
+      resolveServerBinary: vi.fn().mockReturnValue('/fake/datum-server'),
+      spawnServerBinary,
+      stopDockerPostgres: vi.fn(),
+    })
+
+    expect(exitCode).toBe(1)
   })
 
   it('passes CONFIG to the server when a datum.yaml exists in cwd', async () => {
@@ -221,8 +246,9 @@ describe('runDev', () => {
     expect(process.listenerCount('SIGINT')).toBe(baselineListeners + 1)
     process.emit('SIGINT')
 
-    await runPromise
+    const exitCode = await runPromise
 
+    expect(exitCode).toBe(0)
     expect(child.kill).toHaveBeenCalledWith('SIGINT')
     expect(stopDockerPostgres).toHaveBeenCalledTimes(1)
     // The SIGINT listener must be removed once runDev settles, or repeated runs would leak

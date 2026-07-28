@@ -39,7 +39,7 @@ export interface RunDevOptions {
   stopDockerPostgres: typeof stopDockerPostgresDefault
 }
 
-export async function runDev(opts: RunDevOptions): Promise<void> {
+export async function runDev(opts: RunDevOptions): Promise<number> {
   const resolvePostgres = opts.resolvePostgres ?? resolvePostgresDefault
   const resolveServerBinary = opts.resolveServerBinary ?? resolveServerBinaryDefault
   const spawnServerBinary = opts.spawnServerBinary ?? spawnServerBinaryDefault
@@ -62,6 +62,7 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
 
   let sigintHandler: (() => void) | undefined
   let sigtermHandler: (() => void) | undefined
+  let exitCode = 0
 
   // Everything below can throw (writeStateFile, resolveServerBinary, spawnServerBinary) or
   // reject (the child's 'error' event) after Postgres has already been started — the
@@ -98,9 +99,12 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
     process.once('SIGINT', sigintHandler)
     process.once('SIGTERM', sigtermHandler)
 
-    await new Promise<void>((resolve, reject) => {
+    exitCode = await new Promise<number>((resolve, reject) => {
       child.once('error', reject)
-      child.once('close', () => resolve())
+      // A `null` code means the child was terminated by a signal (e.g. our own SIGINT/SIGTERM
+      // kill above) rather than exiting on its own — treat that as a clean exit (0) rather
+      // than a failure.
+      child.once('close', (code: number | null) => resolve(code ?? 0))
     })
   } finally {
     if (sigintHandler) process.off('SIGINT', sigintHandler)
@@ -112,4 +116,6 @@ export async function runDev(opts: RunDevOptions): Promise<void> {
       opts.log(`cleanup failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
+
+  return exitCode
 }
