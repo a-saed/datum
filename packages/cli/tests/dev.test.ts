@@ -131,6 +131,11 @@ describe('runDev', () => {
     const spawnServerBinary = vi.fn().mockReturnValue(child)
     const stopDockerPostgres = vi.fn().mockResolvedValue(undefined)
 
+    // Baseline captured before runDev registers its own listener: the shared `process` object
+    // may already carry other SIGINT listeners (e.g. from the test runner itself), so listener
+    // counts below are asserted relative to this baseline rather than as absolute values.
+    const baselineListeners = process.listenerCount('SIGINT')
+
     const runPromise = runDev({
       dataDir: tmp,
       statePath,
@@ -145,11 +150,20 @@ describe('runDev', () => {
     // Let runDev's awaits (Postgres resolution, state file write — real fs I/O) run to
     // completion so its SIGINT listener is registered before we emit the signal — same
     // reasoning as the setImmediate-inside-the-mock pattern above, just driven from the test
-    // body instead. Poll rather than a fixed number of ticks since real fs I/O timing varies.
-    for (let i = 0; i < 50 && process.listenerCount('SIGINT') === 0; i++) {
+    // body instead. Poll against a wall-clock deadline rather than a fixed tick count: a fixed
+    // count of setImmediate iterations races against real fs I/O (mkdir/writeFile) and was
+    // observed to time out under system load well before the listener was registered, causing
+    // exactly the flakiness this test is meant to catch. A generous deadline keeps the test fast
+    // in the common case while tolerating slow I/O, and still fails within a bounded time if
+    // runDev genuinely stops registering the handler.
+    const pollDeadline = Date.now() + 2000
+    while (
+      Date.now() < pollDeadline &&
+      process.listenerCount('SIGINT') === baselineListeners
+    ) {
       await new Promise(resolve => setImmediate(resolve))
     }
-    expect(process.listenerCount('SIGINT')).toBe(1)
+    expect(process.listenerCount('SIGINT')).toBe(baselineListeners + 1)
     process.emit('SIGINT')
 
     await runPromise
@@ -158,7 +172,7 @@ describe('runDev', () => {
     expect(stopDockerPostgres).toHaveBeenCalledTimes(1)
     // The SIGINT listener must be removed once runDev settles, or repeated runs would leak
     // listeners onto the shared `process` object.
-    expect(process.listenerCount('SIGINT')).toBe(0)
+    expect(process.listenerCount('SIGINT')).toBe(baselineListeners)
   })
 })
 
