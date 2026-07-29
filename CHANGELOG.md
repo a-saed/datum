@@ -1,7 +1,19 @@
 # Changelog
 
-Notable changes to `datum-sync`. For the full feature history, see the
+Notable changes to `datum-sync` and `datum-cli`. For the full feature history, see the
 "Recently shipped" section of [ROADMAP.md](./ROADMAP.md).
+
+## datum-cli 0.1.0 — 2026-07-29
+
+### Added
+- **`datum-cli`** — new zero-install CLI package. `npx datum-cli dev` runs a local
+  Postgres and `datum-server` together with no Go toolchain and no hand-written
+  Docker config: it uses `DATABASE_URL` if set (`--db` flag or env), otherwise
+  starts a PostGIS container via Docker, and exits with a clear error if neither
+  is available. `datum-cli init` generates a starter `datum.yaml`; `datum-cli stop`
+  tears down whatever `dev` started. The `datum-server` binary ships as
+  per-platform npm packages (linux/darwin × x64/arm64) selected automatically
+  at install time.
 
 ## 0.13.1 — 2026-07-16
 

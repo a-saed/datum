@@ -20,4 +20,17 @@ describe('parseCommand', () => {
     expect(parseCommand([])).toEqual({ command: 'unknown' })
     expect(parseCommand(['bogus'])).toEqual({ command: 'unknown' })
   })
+
+  it('recognizes --help and --version', () => {
+    expect(parseCommand(['--help'])).toEqual({ command: 'help' })
+    expect(parseCommand(['-h'])).toEqual({ command: 'help' })
+    expect(parseCommand(['help'])).toEqual({ command: 'help' })
+    expect(parseCommand(['--version'])).toEqual({ command: 'version' })
+    expect(parseCommand(['-v'])).toEqual({ command: 'version' })
+  })
+
+  it('flags --db with no value as invalid instead of silently unsetting it', () => {
+    expect(parseCommand(['dev', '--db'])).toEqual({ command: 'dev-invalid-db' })
+    expect(parseCommand(['dev', '--db', '--other-flag'])).toEqual({ command: 'dev-invalid-db' })
+  })
 })

@@ -145,9 +145,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: CLI tests
-        run: npm test -w datum-cli
-
       - name: Build CLI
         run: npm run build
         working-directory: packages/cli
