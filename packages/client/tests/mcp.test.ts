@@ -99,6 +99,36 @@ describe('handleQuery', () => {
     const result = await handleQuery(client, 'INSERT INTO features (name) VALUES ($1)', ['x'], true)
     expect(result.rows).toEqual([])
   })
+
+  it('returns rows without truncation fields when under maxRows', async () => {
+    const client = makeClient({
+      query: vi.fn().mockResolvedValue({ rows: [{ name: 'a' }, { name: 'b' }] }),
+    })
+    const result = await handleQuery(client, 'SELECT name FROM features', undefined, false, 10)
+    expect(result.rows).toHaveLength(2)
+    expect(result.row_count).toBe(2)
+    expect(result).not.toHaveProperty('truncated')
+    expect(result).not.toHaveProperty('total_row_count')
+  })
+
+  it('truncates rows and reports total_row_count when over maxRows', async () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({ id: i }))
+    const client = makeClient({ query: vi.fn().mockResolvedValue({ rows }) })
+    const result = await handleQuery(client, 'SELECT id FROM features', undefined, false, 2)
+    expect(result.rows).toEqual([{ id: 0 }, { id: 1 }])
+    expect(result.row_count).toBe(2)
+    expect(result.truncated).toBe(true)
+    expect(result.total_row_count).toBe(5)
+  })
+
+  it('defaults maxRows to 1000 when not provided', async () => {
+    const rows = Array.from({ length: 1001 }, (_, i) => ({ id: i }))
+    const client = makeClient({ query: vi.fn().mockResolvedValue({ rows }) })
+    const result = await handleQuery(client, 'SELECT id FROM features', undefined, false)
+    expect(result.rows).toHaveLength(1000)
+    expect(result.truncated).toBe(true)
+    expect(result.total_row_count).toBe(1001)
+  })
 })
 
 describe('handleGetSchema', () => {

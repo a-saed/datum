@@ -36,18 +36,37 @@ export async function handleQuery(
   sql: string,
   params: unknown[] | undefined,
   allowWrites: boolean,
-): Promise<{ rows: Record<string, unknown>[]; row_count: number; duration_ms: number }> {
+  maxRows: number = 1000,
+): Promise<{
+  rows: Record<string, unknown>[]
+  row_count: number
+  duration_ms: number
+  truncated?: boolean
+  total_row_count?: number
+}> {
   if (!allowWrites && !isReadOnlySql(sql)) {
     throw new Error('Write operations are disabled. Only SELECT and EXPLAIN (without ANALYZE) are permitted. Start the MCP server with --allow-writes to enable writes.')
   }
   const start = Date.now()
   const result = await client.query<Record<string, unknown>>(sql, params)
-  // rows_returned is 0 for mutations without RETURNING clause
-  return {
-    rows: result.rows,
-    row_count: result.rows.length,
+  const totalRows = result.rows.length
+  const rows = totalRows > maxRows ? result.rows.slice(0, maxRows) : result.rows
+  const response: {
+    rows: Record<string, unknown>[]
+    row_count: number
+    duration_ms: number
+    truncated?: boolean
+    total_row_count?: number
+  } = {
+    rows,
+    row_count: rows.length,
     duration_ms: Date.now() - start,
   }
+  if (totalRows > maxRows) {
+    response.truncated = true
+    response.total_row_count = totalRows
+  }
+  return response
 }
 
 export function handleGetSchema(client: DatumClient): {
