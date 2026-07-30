@@ -17,7 +17,7 @@ npm install datum-sync
 The `datum-mcp` binary is included. You can also run it without installing:
 
 ```bash
-npx datum-sync datum-mcp ws://localhost:3000/ws
+npx --package=datum-sync datum-mcp ws://localhost:3000/ws
 ```
 
 ## Zero-install: `datum-cli mcp`
@@ -72,7 +72,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) o
     "datum": {
       "command": "npx",
       "args": [
-        "datum-sync",
+        "--package=datum-sync",
         "datum-mcp",
         "ws://localhost:3000/ws",
         "--table", "features"
