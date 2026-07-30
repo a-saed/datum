@@ -20,6 +20,33 @@ The `datum-mcp` binary is included. You can also run it without installing:
 npx datum-sync datum-mcp ws://localhost:3000/ws
 ```
 
+## Zero-install: `datum-cli mcp`
+
+If you're using [`datum-cli`](/getting-started#cli) for local development, `datum-cli mcp` starts Postgres, `datum-server`, and this MCP bridge together in one command:
+
+```bash
+npx datum-cli mcp
+```
+
+It resolves a table name the same way `datum-cli init` writes it: from `table.name` in a `datum.yaml` in the current directory, or via `--table <name>` if you have multiple tables configured or no config file. All of `datum-mcp`'s flags below (`--allow-writes`, `--jwt`, `--bbox`, `--max-rows`) are forwarded as-is:
+
+```bash
+npx datum-cli mcp --table parcels --allow-writes
+```
+
+Point Claude Desktop at `datum-cli` directly instead of `datum-sync`:
+
+```json
+{
+  "mcpServers": {
+    "datum": {
+      "command": "npx",
+      "args": ["datum-cli", "mcp"]
+    }
+  }
+}
+```
+
 ## Usage
 
 ```
@@ -31,6 +58,7 @@ datum-mcp <ws://server-url> [--table <name>] [--allow-writes] [--jwt <token>]
 | `--table` | `features` | Table name (must match your datum-server config) |
 | `--allow-writes` | off | Enable INSERT/UPDATE/DELETE. Off by default. |
 | `--jwt` | — | JWT for authenticated datum-servers |
+| `--max-rows` | `1000` | Cap on rows returned by `query`. Results beyond this are truncated with a `total_row_count` note. |
 
 The server connects to datum-server, syncs the local PGlite snapshot, then listens on **stdin/stdout** for MCP JSON-RPC messages. All diagnostic output goes to **stderr** so it never interferes with the protocol.
 
@@ -97,6 +125,8 @@ SELECT ST_AsGeoJSON(geom), name FROM features WHERE ST_DWithin(geom::geography, 
 ```
 
 By default the tool is **read-only** — mutations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, etc.) are rejected. Start the server with `--allow-writes` to enable them.
+
+Results are capped at `--max-rows` (default `1000`). When a query's result exceeds the cap, the response includes `"truncated": true` and `"total_row_count"` alongside the (truncated) `rows` — narrow the query with `WHERE`/`LIMIT` to see more.
 
 ---
 

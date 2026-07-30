@@ -14,6 +14,7 @@ Get datum running locally in under 5 minutes.
 - `npx datum-cli init` — interactively generates a starter `datum.yaml`.
 - `npx datum-cli dev` — resolves Postgres (BYO via `--db`/`DATABASE_URL`, else Docker) and runs `datum-server` together. If neither is available, it exits with an error explaining how to fix that.
 - `npx datum-cli stop` — tears down whatever `dev` started.
+- `npx datum-cli mcp` — starts Postgres, `datum-server`, and an [MCP](/mcp) bridge together, so an AI agent (Claude Desktop, Cursor, etc.) can query your spatial data with natural language.
 
 ## 1. Start PostGIS and datum-server
 
