@@ -80,7 +80,7 @@ describe('spawnMcpBridge', () => {
     )
     expect(spawnFn).toHaveBeenCalledWith(
       'npx',
-      ['datum-sync', 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'parcels', '--allow-writes', '--jwt', 'tok', '--bbox', '-1,-1,1,1', '--max-rows', '500'],
+      ['--package=datum-sync', 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'parcels', '--allow-writes', '--jwt', 'tok', '--bbox', '-1,-1,1,1', '--max-rows', '500'],
       expect.objectContaining({ stdio: 'inherit' })
     )
   })
@@ -90,7 +90,7 @@ describe('spawnMcpBridge', () => {
     spawnMcpBridge('ws://127.0.0.1:3000/ws', { table: 'features' }, spawnFn as any)
     expect(spawnFn).toHaveBeenCalledWith(
       'npx',
-      ['datum-sync', 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'features'],
+      ['--package=datum-sync', 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'features'],
       expect.objectContaining({ stdio: 'inherit' })
     )
   })

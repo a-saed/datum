@@ -69,7 +69,15 @@ export function spawnMcpBridge(
   if (opts.bbox) args.push('--bbox', opts.bbox)
   if (opts.maxRows !== undefined) args.push('--max-rows', String(opts.maxRows))
 
-  return spawnFn('npx', ['datum-sync', 'datum-mcp', ...args], {
+  // npx has no notion of "package, then command" as two separate positional args: given
+  // `npx datum-sync datum-mcp <url> ...`, npx resolves the package "datum-sync" and treats
+  // *everything* after it — including the literal string "datum-mcp" — as argv for the
+  // resolved bin. Since datum-sync's only bin is named "datum-mcp" (not "datum-sync"), that
+  // extra literal token ends up as datum-mcp's first argv entry, shifting the real ws:// URL
+  // out of the position cli.ts expects and silently breaking every real invocation. Using
+  // `--package=` makes the package and the command being invoked within it explicit and
+  // independent, so only the real args make it through.
+  return spawnFn('npx', ['--package=datum-sync', 'datum-mcp', ...args], {
     env: process.env,
     stdio: 'inherit',
   })
