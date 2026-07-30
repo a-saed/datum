@@ -25,6 +25,9 @@
     "build": "tsc && (chmod +x dist/cli.js 2>/dev/null || true)",
     "test": "vitest run"
   },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
   "optionalDependencies": {
     "datum-server-linux-x64": "0.1.0",
     "datum-server-linux-arm64": "0.1.0",
