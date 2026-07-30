@@ -33,4 +33,32 @@ describe('parseCommand', () => {
     expect(parseCommand(['dev', '--db'])).toEqual({ command: 'dev-invalid-db' })
     expect(parseCommand(['dev', '--db', '--other-flag'])).toEqual({ command: 'dev-invalid-db' })
   })
+
+  it('parses mcp with no flags', () => {
+    expect(parseCommand(['mcp'])).toEqual({
+      command: 'mcp',
+      databaseUrl: undefined,
+      table: undefined,
+      allowWrites: false,
+      jwt: undefined,
+      bbox: undefined,
+      maxRows: undefined,
+    })
+  })
+
+  it('parses mcp with all its flags', () => {
+    expect(
+      parseCommand([
+        'mcp', '--table', 'parcels', '--allow-writes', '--jwt', 'tok', '--bbox', '-1,-1,1,1', '--max-rows', '500',
+      ])
+    ).toEqual({
+      command: 'mcp',
+      databaseUrl: undefined,
+      table: 'parcels',
+      allowWrites: true,
+      jwt: 'tok',
+      bbox: '-1,-1,1,1',
+      maxRows: 500,
+    })
+  })
 })

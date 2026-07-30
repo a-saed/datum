@@ -6,12 +6,14 @@ import { realpathSync } from 'node:fs'
 import { runDev } from './commands/dev.js'
 import { runStop } from './commands/stop.js'
 import { runInit } from './commands/init.js'
+import { runMcp } from './commands/mcp.js'
 import { stopDockerPostgres } from './docker.js'
 import { CLI_VERSION } from './version.js'
 
 export type ParsedCommand =
   | { command: 'dev'; databaseUrl?: string }
   | { command: 'dev-invalid-db' }
+  | { command: 'mcp'; databaseUrl?: string; table?: string; allowWrites: boolean; jwt?: string; bbox?: string; maxRows?: number }
   | { command: 'stop' }
   | { command: 'init' }
   | { command: 'help' }
@@ -29,12 +31,27 @@ export function parseCommand(args: string[]): ParsedCommand {
     if (value === undefined || value.startsWith('-')) return { command: 'dev-invalid-db' }
     return { command: 'dev', databaseUrl: value }
   }
+  if (command === 'mcp') {
+    const dbIdx = rest.indexOf('--db')
+    const databaseUrl = dbIdx >= 0 ? rest[dbIdx + 1] : undefined
+    const tableIdx = rest.indexOf('--table')
+    const table = tableIdx >= 0 ? rest[tableIdx + 1] : undefined
+    const allowWrites = rest.includes('--allow-writes')
+    const jwtIdx = rest.indexOf('--jwt')
+    const jwt = jwtIdx >= 0 ? rest[jwtIdx + 1] : undefined
+    const bboxIdx = rest.indexOf('--bbox')
+    const bbox = bboxIdx >= 0 ? rest[bboxIdx + 1] : undefined
+    const maxRowsIdx = rest.indexOf('--max-rows')
+    const maxRowsStr = maxRowsIdx >= 0 ? rest[maxRowsIdx + 1] : undefined
+    const maxRows = maxRowsStr !== undefined ? Number(maxRowsStr) : undefined
+    return { command: 'mcp', databaseUrl, table, allowWrites, jwt, bbox, maxRows }
+  }
   if (command === 'stop') return { command: 'stop' }
   if (command === 'init') return { command: 'init' }
   return { command: 'unknown' }
 }
 
-const USAGE = `datum-cli ${CLI_VERSION}\nUsage: datum <dev|stop|init> [--db <connection-string>]\n       datum --help | --version\n`
+const USAGE = `datum-cli ${CLI_VERSION}\nUsage: datum <dev|stop|init|mcp> [--db <connection-string>]\n       datum mcp [--table <name>] [--allow-writes] [--jwt <token>] [--bbox <minX,minY,maxX,maxY>] [--max-rows <n>]\n       datum --help | --version\n`
 
 const STATE_PATH = path.join(os.homedir(), '.datum', 'dev-state.json')
 
@@ -47,6 +64,22 @@ async function main() {
       const code = await runDev({
         databaseUrl: parsed.databaseUrl ?? process.env.DATABASE_URL,
         statePath: STATE_PATH,
+        log,
+        stopDockerPostgres,
+      })
+      if (code !== 0) process.exit(code)
+      break
+    }
+    case 'mcp': {
+      const code = await runMcp({
+        databaseUrl: parsed.databaseUrl ?? process.env.DATABASE_URL,
+        table: parsed.table,
+        allowWrites: parsed.allowWrites,
+        jwt: parsed.jwt,
+        bbox: parsed.bbox,
+        maxRows: parsed.maxRows,
+        statePath: STATE_PATH,
+        logFilePath: path.join(os.homedir(), '.datum', 'mcp-server.log'),
         log,
         stopDockerPostgres,
       })
