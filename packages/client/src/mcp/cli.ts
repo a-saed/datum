@@ -16,10 +16,13 @@ const bboxNext  = bboxIdx >= 0 ? args[bboxIdx + 1] : undefined
 const bbox: [number, number, number, number] | undefined = bboxNext && !bboxNext.startsWith('--')
   ? bboxNext.split(',').map(Number) as [number, number, number, number]
   : undefined
+const maxRowsIdx  = args.indexOf('--max-rows')
+const maxRowsNext = maxRowsIdx >= 0 ? args[maxRowsIdx + 1] : undefined
+const maxRows: number | undefined = maxRowsNext && !maxRowsNext.startsWith('--') ? Number(maxRowsNext) : undefined
 
 if (!serverUrl) {
   process.stderr.write(
-    'Usage: datum-mcp <ws://server-url> [--table <name>] [--bbox minX,minY,maxX,maxY] [--allow-writes] [--jwt <token>]\n'
+    'Usage: datum-mcp <ws://server-url> [--table <name>] [--bbox minX,minY,maxX,maxY] [--allow-writes] [--jwt <token>] [--max-rows <n>]\n'
   )
   process.exit(1)
 }
@@ -40,7 +43,7 @@ try {
   process.stdin.on('end', async () => {
     await client.disconnect()
   })
-  await initDatumMcp(client, { allowWrites })
+  await initDatumMcp(client, { allowWrites, maxRows })
   // Process stays alive via StdioServerTransport's stdin listener
 } catch (err) {
   process.stderr.write(`datum MCP: failed to connect — ${String(err)}\n`)

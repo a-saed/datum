@@ -2,9 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import type { DatumClient } from '../client.js'
+import { PACKAGE_VERSION } from '../version.js'
 
 export interface McpOptions {
   allowWrites?: boolean
+  maxRows?: number
 }
 
 function stripSqlComments(sql: string): string {
@@ -103,12 +105,13 @@ export async function handleGetStatus(client: DatumClient): Promise<{
 
 export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): Promise<void> {
   const allowWrites = opts.allowWrites ?? false
+  const maxRows = opts.maxRows ?? 1000
 
-  const server = new McpServer({ name: 'datum', version: '0.13.0' /* keep in sync with package.json */ })
+  const server = new McpServer({ name: 'datum', version: PACKAGE_VERSION })
 
   server.tool(
     'query',
-    `Run SQL against the local PGlite database synced from datum-server. Full PostGIS available (ST_Distance, ST_Within, ST_DWithin, ST_AsGeoJSON, etc.). Table: ${client.tableName}.${allowWrites ? '' : ' Read-only: mutations are disabled.'}`,
+    `Run SQL against the local PGlite database synced from datum-server. Full PostGIS available (ST_Distance, ST_Within, ST_DWithin, ST_AsGeoJSON, etc.). Table: ${client.tableName}.${allowWrites ? '' : ' Read-only: mutations are disabled.'} Results are capped at ${maxRows} rows; narrow with WHERE/LIMIT for larger tables.`,
     {
       sql:    z.string().describe('SQL query to execute'),
       params: z.array(z.unknown()).optional().describe('Positional parameters ($1, $2, …)'),
@@ -118,7 +121,7 @@ export async function initDatumMcp(client: DatumClient, opts: McpOptions = {}): 
         if (client.connectionStatus !== 'connected') {
           return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'disconnected — reconnecting' }) }], isError: true }
         }
-        const result = await handleQuery(client, sql, params, allowWrites)
+        const result = await handleQuery(client, sql, params, allowWrites, maxRows)
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
       } catch (err) {
         return { content: [{ type: 'text' as const, text: `Error: ${String(err)}` }], isError: true }
