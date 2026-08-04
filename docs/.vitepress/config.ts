@@ -4,7 +4,7 @@ export default defineConfig({
   title: 'Datum',
   description: 'Local-first spatial sync for PostGIS.',
   base: '/datum/',
-  srcExclude: ['**/superpowers/**'],
+  srcExclude: ['**/superpowers/**', '**/specs/**', '**/plans/**'],
   ignoreDeadLinks: [/localhost/],
   head: [['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }]],
   themeConfig: {
