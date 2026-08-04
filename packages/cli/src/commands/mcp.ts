@@ -58,6 +58,19 @@ export interface McpBridgeOptions {
   maxRows?: number
 }
 
+// The bridge's `--max-rows` guardrail only exists starting with this datum-sync release (shipped
+// as part of this same feature branch). `npm exec`/`npx --package=` prefers a locally-installed
+// datum-sync over the registry when one exists in the user's project, so an unpinned `datum-sync`
+// specifier can silently resolve to an older local install whose datum-mcp bin doesn't understand
+// `--max-rows` at all (unknown flags are ignored by its simple arg parser) — the guardrail would
+// then silently no-op instead of erroring. Pinning to `^MIN_DATUM_SYNC_VERSION` guarantees the
+// resolved datum-sync always supports the flag we're passing it.
+//
+// NOTE: 0.14.0 is a placeholder for "the next minor after 0.13.1" (datum-sync's version as of this
+// branch) — confirm/bump this to the actual published version datum-sync ships as once this
+// feature branch's client changes are released.
+export const MIN_DATUM_SYNC_VERSION = '0.14.0'
+
 export function spawnMcpBridge(
   wsUrl: string,
   opts: McpBridgeOptions,
@@ -77,7 +90,7 @@ export function spawnMcpBridge(
   // out of the position cli.ts expects and silently breaking every real invocation. Using
   // `--package=` makes the package and the command being invoked within it explicit and
   // independent, so only the real args make it through.
-  return spawnFn('npx', ['--package=datum-sync', 'datum-mcp', ...args], {
+  return spawnFn('npx', [`--package=datum-sync@^${MIN_DATUM_SYNC_VERSION}`, 'datum-mcp', ...args], {
     env: process.env,
     stdio: 'inherit',
   })

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { resolveTableName, resolvePort, spawnMcpBridge, runMcp } from '../src/commands/mcp.js'
+import { resolveTableName, resolvePort, spawnMcpBridge, runMcp, MIN_DATUM_SYNC_VERSION } from '../src/commands/mcp.js'
 
 describe('resolveTableName', () => {
   it('returns the explicit table when given, ignoring datum.yaml', async () => {
@@ -80,7 +80,7 @@ describe('spawnMcpBridge', () => {
     )
     expect(spawnFn).toHaveBeenCalledWith(
       'npx',
-      ['--package=datum-sync', 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'parcels', '--allow-writes', '--jwt', 'tok', '--bbox', '-1,-1,1,1', '--max-rows', '500'],
+      [`--package=datum-sync@^${MIN_DATUM_SYNC_VERSION}`, 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'parcels', '--allow-writes', '--jwt', 'tok', '--bbox', '-1,-1,1,1', '--max-rows', '500'],
       expect.objectContaining({ stdio: 'inherit' })
     )
   })
@@ -90,9 +90,13 @@ describe('spawnMcpBridge', () => {
     spawnMcpBridge('ws://127.0.0.1:3000/ws', { table: 'features' }, spawnFn as any)
     expect(spawnFn).toHaveBeenCalledWith(
       'npx',
-      ['--package=datum-sync', 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'features'],
+      [`--package=datum-sync@^${MIN_DATUM_SYNC_VERSION}`, 'datum-mcp', 'ws://127.0.0.1:3000/ws', '--table', 'features'],
       expect.objectContaining({ stdio: 'inherit' })
     )
+  })
+
+  it('pins datum-sync to a minimum version so a stale local install cannot silently ignore --max-rows', () => {
+    expect(MIN_DATUM_SYNC_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
   })
 })
 
