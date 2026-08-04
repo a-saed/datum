@@ -41,11 +41,13 @@ Point Claude Desktop at `datum-cli` directly instead of `datum-sync`:
   "mcpServers": {
     "datum": {
       "command": "npx",
-      "args": ["datum-cli", "mcp"]
+      "args": ["datum-cli", "mcp", "--table", "features"]
     }
   }
 }
 ```
+
+`datum-cli mcp` resolves its table, config, and port from the current working directory (via `datum.yaml`), but Claude Desktop launches MCP servers with its own working directory, not your project's — and `claude_desktop_config.json` has no field to set one. So when configuring `datum-cli mcp` inside another application like Claude Desktop, always pass an explicit `--table <name>` rather than relying on a `datum.yaml` being found in an implicit cwd.
 
 ## Usage
 
