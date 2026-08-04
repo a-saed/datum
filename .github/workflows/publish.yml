@@ -101,6 +101,13 @@ jobs:
         run: go test ./...
         working-directory: packages/server
 
+      # The CLI's Docker-tier integration test spawns `npx --package=datum-sync datum-mcp`,
+      # which resolves to this workspace's local build via npm's workspace resolution — but
+      # only if that build exists. Build it first so the test exercises this branch's code
+      # instead of falling through to a stale or registry-published datum-sync.
+      - name: Build datum-sync
+        run: npm run build -w datum-sync
+
       - name: CLI tests
         run: npm test -w datum-cli
 

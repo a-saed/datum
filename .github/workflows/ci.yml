@@ -60,5 +60,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The CLI's Docker-tier integration test spawns `npx --package=datum-sync datum-mcp`,
+      # which resolves to this workspace's local build via npm's workspace resolution — but
+      # only if that build exists. Build it first so the test exercises this branch's code
+      # instead of falling through to a stale or registry-published datum-sync.
+      - name: Build datum-sync
+        run: npm run build -w datum-sync
+
       - name: Test
         run: npm test -w datum-cli

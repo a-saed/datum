@@ -34,6 +34,14 @@ const goAvailable = goAvailableSync()
 const here = path.dirname(fileURLToPath(import.meta.url))
 const serverDir = path.resolve(here, '..', '..', 'server')
 
+// The MCP bridge is spawned via `npx --package=datum-sync datum-mcp`, which — depending on npm's
+// resolution and what's installed locally — can silently fall back to a stale or registry-published
+// build instead of this workspace's own packages/client. Asserting the bridge's reported version
+// against packages/client/package.json's real version turns that class of drift into a hard test
+// failure instead of a quietly-stale integration test (see version.test.ts for the same pattern).
+const clientPkgPath = fileURLToPath(new URL('../../client/package.json', import.meta.url))
+const clientPkg = JSON.parse(readFileSync(clientPkgPath, 'utf-8')) as { version: string }
+
 // startDockerPostgres defaults to a fixed host port (5433) when not told otherwise, which
 // dev.integration.test.ts also relies on for its own real Docker Postgres container. Vitest runs
 // test files concurrently in separate workers by default, so without picking a distinct port here,
@@ -158,6 +166,9 @@ describe.runIf(dockerAvailable && goAvailable)(
             1
           )
           expect(init.result?.serverInfo?.name).toBe('datum')
+          // Guards against the bridge resolving to a stale or registry-published datum-sync
+          // instead of this workspace's own build — see the comment on clientPkg above.
+          expect(init.result?.serverInfo?.version).toBe(clientPkg.version)
 
           mcpChild.stdin!.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n')
 
