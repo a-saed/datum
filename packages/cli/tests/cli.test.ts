@@ -61,4 +61,43 @@ describe('parseCommand', () => {
       maxRows: 500,
     })
   })
+
+  it('flags mcp flags with no value, or a value that looks like another flag, as invalid', () => {
+    expect(parseCommand(['mcp', '--db'])).toEqual({ command: 'mcp-invalid-flag', flag: '--db' })
+    expect(parseCommand(['mcp', '--db', '--allow-writes'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--db',
+    })
+    expect(parseCommand(['mcp', '--table'])).toEqual({ command: 'mcp-invalid-flag', flag: '--table' })
+    expect(parseCommand(['mcp', '--table', '--allow-writes'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--table',
+    })
+    expect(parseCommand(['mcp', '--jwt'])).toEqual({ command: 'mcp-invalid-flag', flag: '--jwt' })
+    expect(parseCommand(['mcp', '--jwt', '--bbox'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--jwt',
+    })
+    expect(parseCommand(['mcp', '--bbox'])).toEqual({ command: 'mcp-invalid-flag', flag: '--bbox' })
+    expect(parseCommand(['mcp', '--bbox', '--max-rows', '10'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--bbox',
+    })
+    expect(parseCommand(['mcp', '--max-rows'])).toEqual({ command: 'mcp-invalid-flag', flag: '--max-rows' })
+    expect(parseCommand(['mcp', '--max-rows', '--table', 'parcels'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--max-rows',
+    })
+  })
+
+  it('flags a non-numeric --max-rows value as invalid instead of producing NaN', () => {
+    expect(parseCommand(['mcp', '--max-rows', 'abc'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--max-rows',
+    })
+    expect(parseCommand(['mcp', '--max-rows', '-5'])).toEqual({
+      command: 'mcp-invalid-flag',
+      flag: '--max-rows',
+    })
+  })
 })
