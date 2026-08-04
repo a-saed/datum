@@ -150,11 +150,24 @@ export async function runMcp(opts: RunMcpOptions): Promise<number> {
     const env: Record<string, string> = { DATABASE_URL: source.connectionString }
     if (existsSync(configPath)) env.CONFIG = configPath
 
+    await mkdir(path.dirname(opts.logFilePath), { recursive: true })
+    const logStream = createWriteStream(opts.logFilePath, { flags: 'a' })
+    // An async write error (disk full, permission denied, etc.) on this stream would otherwise be
+    // an unhandled 'error' event and crash the process with a raw stack trace. Logging is best
+    // effort — the server itself can keep running even if we can't write its output to disk — so
+    // this just warns via the CLI's own log callback instead of being fatal.
+    logStream.on('error', err => {
+      opts.log(`warning: failed to write datum-server log to ${opts.logFilePath}: ${err instanceof Error ? err.message : String(err)}`)
+    })
+    // datum-server's stdout/stderr are redirected here (not inherited) so the MCP bridge's stdio
+    // pipe stays clean for the protocol — which also means a failed server start (bad
+    // DATABASE_URL, port in use, missing table, ...) produces no visible output at all unless the
+    // user knows to look here. Tell them up front.
+    opts.log(`datum-server output: ${opts.logFilePath}`)
+
     const binaryPath = resolveServerBinary()
     const serverChild = spawnServerBinary(binaryPath, env)
 
-    await mkdir(path.dirname(opts.logFilePath), { recursive: true })
-    const logStream = createWriteStream(opts.logFilePath, { flags: 'a' })
     serverChild.stdout?.pipe(logStream)
     serverChild.stderr?.pipe(logStream)
 
