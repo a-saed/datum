@@ -79,10 +79,16 @@ function sendRequest(child: ChildProcess, method: string, params: unknown, id: n
       return
     }
     const rl = createInterface({ input: child.stdout })
+    // 15s was tuned against a fast local machine and proved too tight on GitHub Actions'
+    // shared runners: dev.integration.test.ts (no MCP bridge, no PGlite WASM boot at all) takes
+    // roughly 2x longer there than locally, and this test additionally waits on the bridge's
+    // own DatumClient connect + PGlite WASM boot before it can respond to anything. The overall
+    // test timeout (150s, see the `it(...)` call below) has ample room for a more generous
+    // per-request budget.
     const timeout = setTimeout(() => {
       rl.close()
       reject(new Error(`timed out waiting for response to ${method}`))
-    }, 15_000)
+    }, 45_000)
     rl.on('line', line => {
       let msg: any
       try {
@@ -166,6 +172,11 @@ describe.runIf(dockerAvailable && goAvailable)(
               stdio: 'pipe',
               detached: true,
             })
+            // Forward the bridge child's stderr so a real failure (npm/npx resolution errors,
+            // DatumClient connection errors, etc.) is actually visible in CI output — piped
+            // stdio is silently swallowed otherwise, since only stdout is read for the MCP
+            // handshake below.
+            mcpChild.stderr?.on('data', chunk => process.stderr.write(`[bridge stderr] ${chunk}`))
             return mcpChild
           },
           stopDockerPostgres,
