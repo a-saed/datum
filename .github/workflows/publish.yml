@@ -108,6 +108,16 @@ jobs:
       - name: Build datum-sync
         run: npm run build -w datum-sync
 
+      # On a genuinely fresh, cold-cache `npm ci` (exactly what every CI run is), the
+      # datum-sync workspace package's `datum-mcp` bin is not always linked into the root
+      # node_modules/.bin/ — confirmed by reproducing this in an isolated clone: a first-ever
+      # `npm ci` on that clone left node_modules/.bin/datum-mcp missing entirely, causing every
+      # `npx --package=datum-sync datum-mcp` invocation to fail with "datum-mcp: not found".
+      # `npm rebuild` re-links bins for already-installed packages without re-fetching anything,
+      # and reliably fixes this — verified the same way (missing before, present after).
+      - name: Repair bin links after build
+        run: npm rebuild
+
       - name: CLI tests
         run: npm test -w datum-cli
 
