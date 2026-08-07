@@ -122,6 +122,17 @@ describe.runIf(dockerAvailable && goAvailable)(
         const log = (msg: string) => process.stderr.write(`[integration] ${msg}\n`)
         const postgresPort = await getFreePort()
 
+        // datum-server's own listen port must also be dynamic, not the hardcoded default 3000
+        // (resolvePort's fallback when PORT is unset and datum.yaml has no port field) — same
+        // reasoning as the Postgres port above, and same technique dev.integration.test.ts
+        // already uses for its own HTTP port: without this, a prior run's server/bridge process
+        // that failed to tear down cleanly leaves port 3000 occupied, and every subsequent run
+        // — even in a fresh test invocation — hangs waiting for a handshake with nothing there
+        // to answer it, rather than failing fast with a clear "port in use" error.
+        const serverPort = await getFreePort()
+        const originalPort = process.env.PORT
+        process.env.PORT = String(serverPort)
+
         let mcpChild: ChildProcess | undefined
 
         const runPromise = runMcp({
@@ -146,7 +157,15 @@ describe.runIf(dockerAvailable && goAvailable)(
             // breaking the handshake. This mirrors the fix applied to the production
             // spawnMcpBridge in src/commands/mcp.ts — see the comment there for the full
             // explanation of npx's argv semantics.
-            mcpChild = spawn('npx', ['--package=datum-sync', 'datum-mcp', ...args], { stdio: 'pipe' })
+            // detached: true so the finally block's teardown below can kill the whole npx
+            // process-group (npx wraps the real datum-mcp process in an intermediate shell,
+            // and a plain child.kill() does not reliably reach that grandchild process) — see
+            // the killProcessTree comment in src/commands/mcp.ts for the full explanation of
+            // the same issue in production spawnMcpBridge.
+            mcpChild = spawn('npx', ['--package=datum-sync', 'datum-mcp', ...args], {
+              stdio: 'pipe',
+              detached: true,
+            })
             return mcpChild
           },
           stopDockerPostgres,
@@ -199,7 +218,18 @@ describe.runIf(dockerAvailable && goAvailable)(
           }
           expect(containerStillExists).toBe(false)
         } finally {
-          mcpChild?.kill()
+          if (mcpChild?.pid) {
+            try {
+              process.kill(-mcpChild.pid, 'SIGKILL')
+            } catch {
+              mcpChild.kill('SIGKILL')
+            }
+          }
+          if (originalPort !== undefined) {
+            process.env.PORT = originalPort
+          } else {
+            delete process.env.PORT
+          }
         }
       },
       150_000

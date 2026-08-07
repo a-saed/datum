@@ -90,10 +90,35 @@ export function spawnMcpBridge(
   // out of the position cli.ts expects and silently breaking every real invocation. Using
   // `--package=` makes the package and the command being invoked within it explicit and
   // independent, so only the real args make it through.
+  // `detached: true` makes this child the leader of its own process group (POSIX). npx/npm exec
+  // wraps the resolved bin in an intermediate shell (`sh -c "datum-mcp" ...`), so the actual
+  // datum-mcp Node process is a *grandchild* of the process we spawn here — a plain
+  // `child.kill(signal)` only signals the top-level npx process and, in practice, npm exec does
+  // not reliably propagate that signal down to its own children, leaving the real datum-mcp
+  // process (and its DatumClient/PGlite instance) running in the background indefinitely.
+  // Killing the negative PID (`-child.pid`) targets the whole process group instead of just the
+  // one process — see killProcessTree below, used everywhere this child is torn down.
   return spawnFn('npx', [`--package=datum-sync@^${MIN_DATUM_SYNC_VERSION}`, 'datum-mcp', ...args], {
     env: process.env,
     stdio: 'inherit',
+    detached: true,
   })
+}
+
+// Kills an entire process group rather than just the direct child — see the detached: true
+// comment on spawnMcpBridge above for why this matters specifically for the npx-wrapped bridge
+// child. Falls back to a plain child.kill() if the process group signal fails (e.g. the process
+// already exited, or — on a platform where detached behaves differently — pid is unavailable).
+function killProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid) {
+    try {
+      process.kill(-child.pid, signal)
+      return
+    } catch {
+      // Fall through to a direct kill below.
+    }
+  }
+  child.kill(signal)
 }
 
 export interface RunMcpOptions {
@@ -198,7 +223,7 @@ export async function runMcp(opts: RunMcpOptions): Promise<number> {
       void cleanup()
         .catch(err => opts.log(`cleanup failed: ${err instanceof Error ? err.message : String(err)}`))
         .then(() => {
-          mcpChild.kill(signal)
+          killProcessTree(mcpChild, signal)
           serverChild.kill(signal)
         })
     }
@@ -218,7 +243,7 @@ export async function runMcp(opts: RunMcpOptions): Promise<number> {
         if (settled) return
         settled = true
         serverChild.kill('SIGTERM')
-        mcpChild.kill('SIGTERM')
+        killProcessTree(mcpChild, 'SIGTERM')
         reject(err)
       }
       mcpChild.once('error', fail)
@@ -228,7 +253,7 @@ export async function runMcp(opts: RunMcpOptions): Promise<number> {
         settle(code ?? 0)
       })
       serverChild.once('close', (code: number | null) => {
-        mcpChild.kill('SIGTERM')
+        killProcessTree(mcpChild, 'SIGTERM')
         settle(code ?? 0)
       })
     })

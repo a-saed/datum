@@ -1,6 +1,7 @@
 // packages/cli/src/docker.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { randomBytes } from 'node:crypto'
 
 const execFileAsync = promisify(execFile)
 
@@ -27,7 +28,12 @@ export async function startDockerPostgres(
 ): Promise<DockerPostgres> {
   const exec = opts.exec ?? defaultExec
   const port = opts.port ?? 5433
-  const containerName = `datum-dev-postgres-${Date.now()}`
+  // Date.now() alone isn't collision-resistant enough: two Node processes (e.g. two Vitest test
+  // files running real-Docker integration tests concurrently in the same CI job) can call this
+  // within the same millisecond on a fast runner, producing an identical container name and a
+  // "Conflict: container name already in use" failure from `docker run`. The random suffix makes
+  // that collision astronomically unlikely regardless of timing.
+  const containerName = `datum-dev-postgres-${Date.now()}-${randomBytes(4).toString('hex')}`
 
   await exec('docker', [
     'run', '-d', '--rm',
