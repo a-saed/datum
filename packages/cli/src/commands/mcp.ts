@@ -66,10 +66,17 @@ export interface McpBridgeOptions {
 // then silently no-op instead of erroring. Pinning to `^MIN_DATUM_SYNC_VERSION` guarantees the
 // resolved datum-sync always supports the flag we're passing it.
 //
-// NOTE: 0.14.0 is a placeholder for "the next minor after 0.13.1" (datum-sync's version as of this
-// branch) — confirm/bump this to the actual published version datum-sync ships as once this
-// feature branch's client changes are released.
-export const MIN_DATUM_SYNC_VERSION = '0.14.0'
+// NOTE: this MUST match a datum-sync version that actually resolves — either the current
+// package.json version (matching the local workspace build, while unreleased) or the real
+// published version once this feature ships. `^0.14.0` was tried first (anticipating the next
+// minor bump) and broke `datum-cli mcp` outright: `npx --package=datum-sync@^0.14.0` fails with
+// ETARGET (no matching version exists anywhere yet, so npx can't resolve anything at all) rather
+// than falling back to an older-but-present version — the version constraint is a hard
+// precondition for npx, not a soft preference. Confirm/bump this together with
+// packages/client/package.json's actual version at release time; until then it must track
+// whatever version is currently checked in, or every real invocation fails to resolve, not just
+// silently skip the guardrail.
+export const MIN_DATUM_SYNC_VERSION = '0.13.1'
 
 export function spawnMcpBridge(
   wsUrl: string,
